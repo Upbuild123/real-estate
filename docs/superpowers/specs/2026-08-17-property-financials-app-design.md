@@ -85,7 +85,19 @@ amount, month) as JSON matching a defined schema. Two extraction types:
 - **Statement extraction**: income lines, expense lines, statement period,
   property manager summary totals, plus a per-unit rent roll (see below).
 - **Loan document extraction**: original loan amount, current balance,
-  interest rate, monthly payment, principal/interest split if shown.
+  interest rate, monthly payment, principal/interest split if shown. Loan
+  documents (from Kiraboshi Bank, a Japanese bank, for both current
+  properties) are variable-rate repayment schedules distinct in format
+  from the Axios statements — see
+  `docs/superpowers/specs/sample-loan-format-notes.md`. Key fields:
+  origination date, maturity date, original loan amount, current
+  interest rate, scheduled rate-change date + new rate, and a payment
+  schedule table (date, total payment, principal, interest, remaining
+  balance) — principal is a fixed amount per payment while interest
+  varies with the declining balance and current rate. Property manager
+  (for statements) and bank (for loans) may differ per property, so
+  extraction templates are matched per-document-source, not assumed
+  universal across properties.
 
 Extraction results are stored alongside a reference to the source file for
 traceability, plus the raw model output for auditability/debugging.
