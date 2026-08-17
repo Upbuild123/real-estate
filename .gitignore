@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+
+# auto-installed by Vercel marketplace integrations (e.g. Neon)
+/.agents
+/skills-lock.json
+
+# Claude Code local state (worktrees, installed skills)
+/.claude
