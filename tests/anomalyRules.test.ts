@@ -75,6 +75,35 @@ describe('runAnomalyRules', () => {
     expect(allFlags).toHaveLength(1)
   })
 
+  it('creates exactly one expense_deviation flag covering multiple deviating account items in the same month', async () => {
+    const property = await createProperty({ name: 'Multi Deviation Test', address: 'x' })
+
+    await seedRecurringExpense(property.id, '2025-11', 10000)
+    await seedRecurringExpense(property.id, '2025-12', 10000)
+    await seedRecurringExpense(property.id, '2026-01', 10000)
+    await seedRecurringExpense(property.id, '2026-02', 50000) // Electricity charge spike
+
+    async function seedWaterCharge(month: string, amount: number) {
+      await db.financialRecord.create({
+        data: { propertyId: property.id, month, category: 'expense', accountItem: 'Water charge', amount, recurring: true, source: 'extracted' },
+      })
+    }
+    await seedWaterCharge('2025-11', 5000)
+    await seedWaterCharge('2025-12', 5000)
+    await seedWaterCharge('2026-01', 5000)
+    await seedWaterCharge('2026-02', 30000) // Water charge spike
+
+    await runAnomalyRules(property.id, '2026-02')
+
+    const allFlags = await db.anomalyFlag.findMany({
+      where: { propertyId: property.id, month: '2026-02', ruleType: 'expense_deviation' },
+    })
+
+    expect(allFlags).toHaveLength(1)
+    expect(allFlags[0].description).toContain('Electricity charge')
+    expect(allFlags[0].description).toContain('Water charge')
+  })
+
   afterAll(async () => {
     await db.anomalyFlag.deleteMany({})
     await db.financialRecord.deleteMany({})
@@ -88,6 +117,7 @@ describe('runAnomalyRules', () => {
             'Not Yet Late Test',
             'Negative Cashflow Test',
             'Dedupe Test',
+            'Multi Deviation Test',
           ],
         },
       },

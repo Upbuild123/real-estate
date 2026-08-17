@@ -33,7 +33,7 @@ async function createFlagIfNew(
 }
 
 async function checkExpenseDeviation(propertyId: string, month: string): Promise<AnomalyFlag[]> {
-  const flags: AnomalyFlag[] = []
+  const descriptions: string[] = []
   const currentRecords = await db.financialRecord.findMany({
     where: { propertyId, month, category: 'expense', recurring: true },
   })
@@ -51,17 +51,16 @@ async function checkExpenseDeviation(propertyId: string, month: string): Promise
 
     const deviation = Math.abs(record.amount - average) / average
     if (deviation > DEVIATION_THRESHOLD) {
-      const flag = await createFlagIfNew(
-        propertyId,
-        month,
-        'expense_deviation',
+      descriptions.push(
         `${record.accountItem} was ${record.amount} vs. trailing 3-month average of ${Math.round(average)} (${Math.round(deviation * 100)}% deviation)`
       )
-      if (flag) flags.push(flag)
     }
   }
 
-  return flags
+  if (descriptions.length === 0) return []
+
+  const flag = await createFlagIfNew(propertyId, month, 'expense_deviation', descriptions.join('; '))
+  return flag ? [flag] : []
 }
 
 async function checkMissingStatement(propertyId: string, month: string, today: Date): Promise<AnomalyFlag[]> {
