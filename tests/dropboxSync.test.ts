@@ -48,9 +48,9 @@ describe('syncDropboxFolder', () => {
     expect(stored?.fileType).toBe('statement')
   })
 
-  it('skips a file already ingested (dedupe by dropboxFileId)', async () => {
+  it('skips a file already ingested with a successful extraction (dedupe by dropboxFileId)', async () => {
     const property = await createProperty({ name: 'Ide Sync Test 2', address: 'x' })
-    await db.dropboxFile.create({
+    const existingFile = await db.dropboxFile.create({
       data: {
         propertyId: property.id,
         dropboxFileId: 'dbx1',
@@ -60,9 +60,64 @@ describe('syncDropboxFolder', () => {
         storageUrl: 'https://blob.example.com/existing.pdf',
       },
     })
+    await db.extraction.create({
+      data: { dropboxFileId: existingFile.id, rawModelOutput: '{}', status: 'success' },
+    })
+    vi.mocked(ingestStatement).mockClear()
+
     const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+
     expect(result.newFiles).toBe(0)
     expect(result.skipped).toBe(1)
+    expect(ingestStatement).not.toHaveBeenCalled()
+  })
+
+  it('retries a file that has a DropboxFile row but no successful extraction (self-heals a stuck/interrupted sync)', async () => {
+    const property = await createProperty({ name: 'Ide Sync Test 6', address: 'x' })
+    const stuckFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx1',
+        filename: '429878_2026-02_report.pdf',
+        uploadedAt: new Date('2026-02-15'),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/stuck.pdf',
+      },
+    })
+    // No Extraction row at all — simulates a prior sync that was killed (e.g. by a function
+    // timeout) after creating the DropboxFile row but before extraction ran.
+    vi.mocked(ingestStatement).mockClear()
+
+    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+
+    expect(result.newFiles).toBe(0)
+    expect(result.skipped).toBe(0)
+    expect(ingestStatement).toHaveBeenCalledTimes(1)
+    expect(ingestStatement).toHaveBeenCalledWith(expect.objectContaining({ dropboxFileId: stuckFile.id }))
+  })
+
+  it('retries a file whose only extraction attempt failed', async () => {
+    const property = await createProperty({ name: 'Ide Sync Test 7', address: 'x' })
+    const failedFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx1',
+        filename: '429878_2026-02_report.pdf',
+        uploadedAt: new Date('2026-02-15'),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/failed.pdf',
+      },
+    })
+    await db.extraction.create({
+      data: { dropboxFileId: failedFile.id, rawModelOutput: 'bad json', status: 'failed' },
+    })
+    vi.mocked(ingestStatement).mockClear()
+
+    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+
+    expect(result.newFiles).toBe(0)
+    expect(result.skipped).toBe(0)
+    expect(ingestStatement).toHaveBeenCalledTimes(1)
   })
 
   it('triggers ingestStatement and, on success, runAnomalyRules for a new statement file', async () => {
@@ -134,13 +189,30 @@ describe('syncDropboxFolder', () => {
   afterEach(async () => {
     // dropboxFileId is globally unique; clean up between tests so a later
     // test's sync of 'dbx1' doesn't collide with an earlier test's record.
-    await db.dropboxFile.deleteMany({ where: { dropboxFileId: 'dbx1' } })
+    // Extraction has a required FK to DropboxFile, so it must go first.
+    const existing = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx1' } })
+    if (existing) {
+      await db.extraction.deleteMany({ where: { dropboxFileId: existing.id } })
+      await db.dropboxFile.delete({ where: { id: existing.id } })
+    }
   })
 
   afterAll(async () => {
     await db.dropboxFile.deleteMany({})
     await db.property.deleteMany({
-      where: { name: { in: ['Ide Sync Test', 'Ide Sync Test 2', 'Ide Sync Test 3', 'Ide Sync Test 4', 'Ide Sync Test 5'] } },
+      where: {
+        name: {
+          in: [
+            'Ide Sync Test',
+            'Ide Sync Test 2',
+            'Ide Sync Test 3',
+            'Ide Sync Test 4',
+            'Ide Sync Test 5',
+            'Ide Sync Test 6',
+            'Ide Sync Test 7',
+          ],
+        },
+      },
     })
     await db.$disconnect()
   })

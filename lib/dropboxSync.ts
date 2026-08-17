@@ -5,6 +5,20 @@ import { ingestStatement } from './extraction/extractStatement'
 import { ingestLoanDocument } from './extraction/extractLoan'
 import { runAnomalyRules } from './anomalyRules'
 
+// A DropboxFile row alone doesn't mean the file was ever successfully processed — a sync
+// can be interrupted (e.g. a serverless function timeout mid-loop) after creating the row
+// but before extraction/ingestion completes or succeeds. Distinguishing "done" from
+// "recorded but unfinished" is what lets a later sync call safely retry the latter instead
+// of skipping it forever.
+async function wasSuccessfullyProcessed(dropboxFile: { id: string; fileType: string }): Promise<boolean> {
+  if (dropboxFile.fileType === 'statement') {
+    const extraction = await db.extraction.findUnique({ where: { dropboxFileId: dropboxFile.id } })
+    return extraction?.status === 'success'
+  }
+  const loan = await db.loan.findFirst({ where: { sourceFileId: dropboxFile.id } })
+  return loan !== null
+}
+
 export async function syncDropboxFolder(property: {
   id: string
   dropboxFolderPath: string
@@ -16,7 +30,8 @@ export async function syncDropboxFolder(property: {
 
   for (const file of files) {
     const existing = await db.dropboxFile.findUnique({ where: { dropboxFileId: file.id } })
-    if (existing) {
+
+    if (existing && (await wasSuccessfullyProcessed(existing))) {
       skipped++
       continue
     }
@@ -25,17 +40,23 @@ export async function syncDropboxFolder(property: {
     const storageUrl = await uploadToStorage(file.name, buffer)
     const fileType = file.name.toLowerCase().includes('loan') ? 'loan' : 'statement'
 
-    const dropboxFile = await db.dropboxFile.create({
-      data: {
-        propertyId: property.id,
-        dropboxFileId: file.id,
-        filename: file.name,
-        uploadedAt: file.serverModified,
-        fileType,
-        storageUrl,
-      },
-    })
-    newFiles++
+    const dropboxFile = existing
+      ? await db.dropboxFile.update({
+          where: { id: existing.id },
+          data: { storageUrl, uploadedAt: file.serverModified, fileType },
+        })
+      : await db.dropboxFile.create({
+          data: {
+            propertyId: property.id,
+            dropboxFileId: file.id,
+            filename: file.name,
+            uploadedAt: file.serverModified,
+            fileType,
+            storageUrl,
+          },
+        })
+
+    if (!existing) newFiles++
 
     const pdfBase64 = buffer.toString('base64')
 
