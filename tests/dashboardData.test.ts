@@ -50,9 +50,15 @@ describe('dashboardData', () => {
     })
 
     const result = await getPortfolioDashboard('2026-01')
-    expect(result.income).toBe(300000)
-    expect(result.perProperty).toHaveLength(2)
-    expect(result.perProperty.find((p) => p.propertyName === 'Portfolio A')?.financials.income).toBe(100000)
+    // getPortfolioDashboard sums across ALL active properties in the DB, not just ones this
+    // test created — asserting against this test's own two properties (rather than the DB-wide
+    // total/length) keeps the test correct regardless of what other active properties exist
+    // (e.g. real properties seeded for local dev/testing).
+    const propertyAEntry = result.perProperty.find((p) => p.propertyId === propertyA.id)
+    const propertyBEntry = result.perProperty.find((p) => p.propertyId === propertyB.id)
+    expect(propertyAEntry?.financials.income).toBe(100000)
+    expect(propertyBEntry?.financials.income).toBe(200000)
+    expect(result.income).toBeGreaterThanOrEqual(300000)
   })
 
   afterAll(async () => {

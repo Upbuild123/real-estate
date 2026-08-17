@@ -1,6 +1,6 @@
 import { db } from '../../../../lib/db'
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   let body: any
   try {
     body = await request.json()
@@ -14,9 +14,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return Response.json({ error: 'amount is required and must be a number' }, { status: 400 })
   }
 
+  const { id } = await params
+
   try {
     const updated = await db.financialRecord.update({
-      where: { id: params.id },
+      where: { id },
       data: { amount, source: 'manual' },
     })
     return Response.json(updated)

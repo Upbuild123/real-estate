@@ -14,7 +14,7 @@ describe('PATCH /api/financial-records/:id', () => {
       method: 'PATCH',
       body: JSON.stringify({ amount: 7500 }),
     })
-    const response = await PATCH(request, { params: { id: record.id } })
+    const response = await PATCH(request, { params: Promise.resolve({ id: record.id }) })
     const body = await response.json()
 
     expect(body.amount).toBe(7500)
@@ -31,7 +31,7 @@ describe('PATCH /api/financial-records/:id', () => {
       method: 'PATCH',
       body: JSON.stringify({ amount: 'not-a-number' }),
     })
-    const response = await PATCH(request, { params: { id: record.id } })
+    const response = await PATCH(request, { params: Promise.resolve({ id: record.id }) })
     expect(response.status).toBe(400)
     const body = await response.json()
     expect(body.error).toBeTruthy()
@@ -42,7 +42,7 @@ describe('PATCH /api/financial-records/:id', () => {
       method: 'PATCH',
       body: JSON.stringify({ amount: 100 }),
     })
-    const response = await PATCH(request, { params: { id: 'nonexistent-id' } })
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'nonexistent-id' }) })
     expect(response.status).toBe(404)
     const body = await response.json()
     expect(body.error).toBe('Financial record not found')
@@ -58,7 +58,7 @@ describe('PATCH /api/financial-records/:id', () => {
       method: 'PATCH',
       body: '{not valid json',
     })
-    const response = await PATCH(request, { params: { id: record.id } })
+    const response = await PATCH(request, { params: Promise.resolve({ id: record.id }) })
     expect(response.status).toBe(400)
     const body = await response.json()
     expect(body.error).toBeTruthy()
