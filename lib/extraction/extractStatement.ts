@@ -1,8 +1,21 @@
 import { db } from '../db'
 import { extractStructuredDataFromPdf, ExtractionParseError } from '../claudeClient'
-import { isRecurringAccountItem, STATEMENT_SCHEMA_DESCRIPTION, type StatementExtraction } from './statementSchema'
+import {
+  isRecurringAccountItem,
+  STATEMENT_SCHEMA_DESCRIPTION,
+  type StatementExtraction,
+  type StatementLineItem,
+} from './statementSchema'
 
 const STATEMENT_SYSTEM_PROMPT = `You are extracting structured financial data from a Japanese property management monthly statement PDF (issued by Axios Management Inc.). The document has a summary/rent-roll page and an itemized income/expense ledger. Extract every rent roll row and every line item from the ledger.`
+
+// Line items don't have a stable ID from the source PDF, and multiple items can share the
+// same accountItem (one "Rent" row per rental unit). This key lets a manual correction on
+// one specific line item survive re-ingestion without being duplicated by a freshly
+// extracted row for that same line item.
+function computeLineItemKey(item: Pick<StatementLineItem, 'accountItem' | 'settlementDate' | 'note'>): string {
+  return `${item.accountItem}|${item.settlementDate}|${item.note}`
+}
 
 export async function ingestStatement(params: {
   dropboxFileId: string
@@ -47,7 +60,16 @@ export async function ingestStatement(params: {
   // "Rent" row per rental unit), so we do not dedupe/merge by accountItem. Instead, for
   // a re-ingestion of the same extraction, we drop all previously-extracted rows and
   // recreate them fresh from the current extraction output. Manual-source rows are never
-  // touched (they're filtered out of the delete), so manual corrections survive re-ingestion.
+  // touched (they're filtered out of the delete), so manual corrections survive re-ingestion —
+  // and we skip recreating an extracted row for any line item a manual correction already
+  // covers (matched by lineItemKey), so the correction isn't duplicated alongside a fresh
+  // extracted value for the same line item.
+  const manualRecords = await db.financialRecord.findMany({
+    where: { propertyId: params.propertyId, extractionId: extraction.id, source: 'manual' },
+    select: { lineItemKey: true },
+  })
+  const manuallyCoveredKeys = new Set(manualRecords.map((r) => r.lineItemKey))
+
   await db.financialRecord.deleteMany({
     where: {
       propertyId: params.propertyId,
@@ -56,16 +78,20 @@ export async function ingestStatement(params: {
     },
   })
 
-  const recordsData = extracted.lineItems.map((item) => ({
-    propertyId: params.propertyId,
-    month: extracted.activityMonth,
-    category: item.category,
-    accountItem: item.accountItem,
-    amount: item.total,
-    recurring: isRecurringAccountItem(item.accountItem),
-    source: 'extracted' as const,
-    extractionId: extraction.id,
-  }))
+  const recordsData = extracted.lineItems
+    .map((item) => ({ item, lineItemKey: computeLineItemKey(item) }))
+    .filter(({ lineItemKey }) => !manuallyCoveredKeys.has(lineItemKey))
+    .map(({ item, lineItemKey }) => ({
+      propertyId: params.propertyId,
+      month: extracted.activityMonth,
+      category: item.category,
+      accountItem: item.accountItem,
+      lineItemKey,
+      amount: item.total,
+      recurring: isRecurringAccountItem(item.accountItem),
+      source: 'extracted' as const,
+      extractionId: extraction.id,
+    }))
 
   if (recordsData.length > 0) {
     await db.financialRecord.createMany({ data: recordsData })

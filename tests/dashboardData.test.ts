@@ -7,7 +7,7 @@ describe('dashboardData', () => {
   it('returns monthly financials plus open anomaly flags for a property', async () => {
     const property = await createProperty({ name: 'Dash Monthly Test', address: 'x' })
     await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'test-key-1', source: 'extracted' },
     })
     await db.anomalyFlag.create({
       data: { propertyId: property.id, month: '2026-01', ruleType: 'negative_cash_flow', description: 'test flag', status: 'open' },
@@ -26,9 +26,9 @@ describe('dashboardData', () => {
     const property = await createProperty({ name: 'Dash YTD Test', address: 'x' })
     await db.financialRecord.createMany({
       data: [
-        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, source: 'extracted' },
-        { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 110000, recurring: true, source: 'extracted' },
-        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 999999, recurring: true, source: 'extracted' }, // excluded, after throughMonth
+        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'test-key-2', source: 'extracted' },
+        { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 110000, recurring: true, lineItemKey: 'test-key-3', source: 'extracted' },
+        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 999999, recurring: true, lineItemKey: 'test-key-4', source: 'extracted' }, // excluded, after throughMonth
       ],
     })
 
@@ -43,10 +43,10 @@ describe('dashboardData', () => {
     const propertyA = await createProperty({ name: 'Portfolio A', address: 'x' })
     const propertyB = await createProperty({ name: 'Portfolio B', address: 'x' })
     await db.financialRecord.create({
-      data: { propertyId: propertyA.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, source: 'extracted' },
+      data: { propertyId: propertyA.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'test-key-5', source: 'extracted' },
     })
     await db.financialRecord.create({
-      data: { propertyId: propertyB.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 200000, recurring: true, source: 'extracted' },
+      data: { propertyId: propertyB.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 200000, recurring: true, lineItemKey: 'test-key-6', source: 'extracted' },
     })
 
     const result = await getPortfolioDashboard('2026-01')

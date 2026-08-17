@@ -82,6 +82,7 @@ model FinancialRecord {
   month         String      // "2026-01" format
   category      String      // "income" | "expense"
   accountItem   String
+  lineItemKey   String      // deterministic identity for this specific line item within its extraction (accountItem|settlementDate|note), lets re-ingestion tell which extracted line a manual correction supersedes
   amount        Int
   recurring     Boolean
   source        String      // "extracted" | "manual"

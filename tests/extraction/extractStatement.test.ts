@@ -102,6 +102,55 @@ describe('ingestStatement', () => {
     expect(amounts).toEqual([98000, 125000])
   })
 
+  it('does not duplicate a manually-corrected line item when re-ingesting a statement with multiple same-accountItem lines', async () => {
+    const property = await createProperty({ name: 'Ide Extract Manual Multi Unit Test', address: 'x' })
+    const dropboxFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx-statement-manual-multiunit',
+        filename: 'multi-unit-manual.pdf',
+        uploadedAt: new Date(),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/x.pdf',
+      },
+    })
+
+    const multiUnitFixture = {
+      ...fixture,
+      lineItems: [
+        { ...fixture.lineItems[0], settlementDate: '2026-01-30', note: 'Unit 101 rent' },
+        { ...fixture.lineItems[0], amount: 98000, total: 98000, settlementDate: '2026-01-30', note: 'Unit 102 rent' },
+      ],
+    }
+    ;(extractStructuredDataFromPdf as any).mockResolvedValueOnce(multiUnitFixture)
+
+    const first = await ingestStatement({
+      dropboxFileId: dropboxFile.id,
+      propertyId: property.id,
+      pdfBase64: 'ZmFrZQ==',
+    })
+    if (first.status !== 'success') throw new Error('setup failed')
+
+    const unit102Record = await db.financialRecord.findFirstOrThrow({
+      where: { propertyId: property.id, accountItem: 'Rent', amount: 98000 },
+    })
+    await db.financialRecord.update({
+      where: { id: unit102Record.id },
+      data: { amount: 105000, source: 'manual' },
+    })
+
+    ;(extractStructuredDataFromPdf as any).mockResolvedValueOnce(multiUnitFixture)
+    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+
+    const rentRecords = await db.financialRecord.findMany({
+      where: { propertyId: property.id, accountItem: 'Rent' },
+    })
+    expect(rentRecords).toHaveLength(2)
+    const amounts = rentRecords.map((r) => r.amount).sort((a, b) => a - b)
+    expect(amounts).toEqual([105000, 125000])
+    expect(rentRecords.find((r) => r.amount === 105000)?.source).toBe('manual')
+  })
+
   it('re-ingesting a file that fails extraction twice returns a graceful failure both times, with one Extraction row', async () => {
     ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json 1'))
     const property = await createProperty({ name: 'Ide Extract Double Fail Test', address: 'x' })
@@ -171,6 +220,7 @@ describe('ingestStatement', () => {
             'Ide Extract Test 2',
             'Ide Extract Fail Test',
             'Ide Extract Test Multi Unit',
+            'Ide Extract Manual Multi Unit Test',
             'Ide Extract Double Fail Test',
           ],
         },

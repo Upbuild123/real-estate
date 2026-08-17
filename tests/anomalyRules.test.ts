@@ -5,7 +5,7 @@ import { runAnomalyRules } from '../lib/anomalyRules'
 
 async function seedRecurringExpense(propertyId: string, month: string, amount: number) {
   await db.financialRecord.create({
-    data: { propertyId, month, category: 'expense', accountItem: 'Electricity charge', amount, recurring: true, source: 'extracted' },
+    data: { propertyId, month, category: 'expense', accountItem: 'Electricity charge', amount, recurring: true, lineItemKey: 'test-key-1', source: 'extracted' },
   })
 }
 
@@ -50,10 +50,10 @@ describe('runAnomalyRules', () => {
   it('flags negative cash flow after debt service', async () => {
     const property = await createProperty({ name: 'Negative Cashflow Test', address: 'x' })
     await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'test-key-2', source: 'extracted' },
     })
     await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Repair expense', amount: 500000, recurring: false, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Repair expense', amount: 500000, recurring: false, lineItemKey: 'test-key-3', source: 'extracted' },
     })
     const flags = await runAnomalyRules(property.id, '2026-01')
     expect(flags.some((f) => f.ruleType === 'negative_cash_flow')).toBe(true)
@@ -85,7 +85,7 @@ describe('runAnomalyRules', () => {
 
     async function seedWaterCharge(month: string, amount: number) {
       await db.financialRecord.create({
-        data: { propertyId: property.id, month, category: 'expense', accountItem: 'Water charge', amount, recurring: true, source: 'extracted' },
+        data: { propertyId: property.id, month, category: 'expense', accountItem: 'Water charge', amount, recurring: true, lineItemKey: 'test-key-4', source: 'extracted' },
       })
     }
     await seedWaterCharge('2025-11', 5000)

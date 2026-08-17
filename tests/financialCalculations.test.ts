@@ -12,9 +12,9 @@ describe('getMonthlyFinancials', () => {
 
     await db.financialRecord.createMany({
       data: [
-        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 859500, recurring: true, source: 'extracted' },
-        { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Property management fee', amount: 41073, recurring: true, source: 'extracted' },
-        { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 10226, recurring: true, source: 'extracted' },
+        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 859500, recurring: true, lineItemKey: 'test-key-1', source: 'extracted' },
+        { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Property management fee', amount: 41073, recurring: true, lineItemKey: 'test-key-2', source: 'extracted' },
+        { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 10226, recurring: true, lineItemKey: 'test-key-3', source: 'extracted' },
       ],
     })
 
@@ -57,7 +57,7 @@ describe('getMonthlyFinancials', () => {
   it('floors taxable income at 0 when expenses and debt service exceed income', async () => {
     const property = await createProperty({ name: 'Loss Test', address: 'x' })
     await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'test-key-4', source: 'extracted' },
     })
     await createLoan({
       propertyId: property.id,
@@ -79,8 +79,8 @@ describe('getMonthlyFinancials', () => {
 
     await db.financialRecord.createMany({
       data: [
-        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 500000, recurring: true, source: 'extracted' },
-        { propertyId: property.id, month: '2026-03', category: 'expense', accountItem: 'Utilities', amount: 20000, recurring: true, source: 'extracted' },
+        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 500000, recurring: true, lineItemKey: 'test-key-5', source: 'extracted' },
+        { propertyId: property.id, month: '2026-03', category: 'expense', accountItem: 'Utilities', amount: 20000, recurring: true, lineItemKey: 'test-key-6', source: 'extracted' },
       ],
     })
 

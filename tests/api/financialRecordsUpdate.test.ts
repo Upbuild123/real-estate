@@ -7,7 +7,7 @@ describe('PATCH /api/financial-records/:id', () => {
   it('updates the amount and sets source to manual', async () => {
     const property = await createProperty({ name: 'Correction Test', address: 'x' })
     const record = await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 5000, recurring: true, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 5000, recurring: true, lineItemKey: 'test-key-1', source: 'extracted' },
     })
 
     const request = new Request(`http://localhost/api/financial-records/${record.id}`, {
@@ -24,7 +24,7 @@ describe('PATCH /api/financial-records/:id', () => {
   it('returns 400 when amount is missing or not a number', async () => {
     const property = await createProperty({ name: 'Correction Test', address: 'x' })
     const record = await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 5000, recurring: true, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 5000, recurring: true, lineItemKey: 'test-key-2', source: 'extracted' },
     })
 
     const request = new Request(`http://localhost/api/financial-records/${record.id}`, {
@@ -51,7 +51,7 @@ describe('PATCH /api/financial-records/:id', () => {
   it('returns 400 for malformed JSON body', async () => {
     const property = await createProperty({ name: 'Correction Test', address: 'x' })
     const record = await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 5000, recurring: true, source: 'extracted' },
+      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Utilities', amount: 5000, recurring: true, lineItemKey: 'test-key-3', source: 'extracted' },
     })
 
     const request = new Request(`http://localhost/api/financial-records/${record.id}`, {
