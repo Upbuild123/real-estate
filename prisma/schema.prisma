@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id             String         @id @default(cuid())
+  name           String
+  address        String
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  loans          Loan[]
+  annualCosts    AnnualCost[]
+  dropboxFiles   DropboxFile[]
+  financialRecords FinancialRecord[]
+  anomalyFlags   AnomalyFlag[]
+}
+
+model Loan {
+  id               String   @id @default(cuid())
+  propertyId       String
+  property         Property @relation(fields: [propertyId], references: [id])
+  lender           String
+  originalAmount   Int
+  currentBalance   Int
+  currentRate      Float
+  rateChangeDate   DateTime?
+  newRate          Float?
+  monthlyPrincipal Int
+  originationDate  DateTime
+  maturityDate     DateTime
+  sourceFileId     String?
+  createdAt        DateTime @default(now())
+}
+
+model AnnualCost {
+  id            String   @id @default(cuid())
+  propertyId    String
+  property      Property @relation(fields: [propertyId], references: [id])
+  costType      String   // "tax" | "insurance"
+  year          Int
+  annualAmount  Int
+
+  @@unique([propertyId, costType, year])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model DropboxFile {
+  id             String   @id @default(cuid())
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id])
+  dropboxFileId  String   @unique
+  filename       String
+  uploadedAt     DateTime
+  fileType       String   // "statement" | "loan"
+  storageUrl     String
+  extraction     Extraction?
+}
+
+model Extraction {
+  id             String      @id @default(cuid())
+  dropboxFileId  String      @unique
+  dropboxFile    DropboxFile @relation(fields: [dropboxFileId], references: [id])
+  rawModelOutput String
+  status         String      // "success" | "failed"
+  extractedAt    DateTime    @default(now())
+  financialRecords FinancialRecord[]
+}
+
+model FinancialRecord {
+  id            String      @id @default(cuid())
+  propertyId    String
+  property      Property    @relation(fields: [propertyId], references: [id])
+  month         String      // "2026-01" format
+  category      String      // "income" | "expense"
+  accountItem   String
+  amount        Int
+  recurring     Boolean
+  source        String      // "extracted" | "manual"
+  extractionId  String?
+  extraction    Extraction? @relation(fields: [extractionId], references: [id])
+  createdAt     DateTime    @default(now())
+}
+
+model AnomalyFlag {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id])
+  month       String
+  ruleType    String
+  description String
+  status      String   @default("open") // "open" | "resolved"
+  createdAt   DateTime @default(now())
+}
