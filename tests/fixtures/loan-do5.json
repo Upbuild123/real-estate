@@ -1,0 +1,14 @@
+{
+  "lender": "Kiraboshi Bank",
+  "originationDate": "2025-07-31",
+  "maturityDate": "2045-07-31",
+  "originalLoanAmount": 221800000,
+  "currentInterestRate": 1.825,
+  "rateChangeDate": "2026-09-01",
+  "newInterestRate": 2.075,
+  "monthlyPrincipal": 925000,
+  "paymentSchedule": [
+    { "date": "2026-08-31", "totalPayment": 1282766, "principal": 925000, "interest": 357766, "remainingBalance": 209775000 },
+    { "date": "2026-09-30", "totalPayment": 1316808, "principal": 925000, "interest": 391808, "remainingBalance": 208850000 }
+  ]
+}
