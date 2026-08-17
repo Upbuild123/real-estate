@@ -74,12 +74,48 @@ describe('getMonthlyFinancials', () => {
     expect(result.incomeTaxOwed).toBe(0)
   })
 
+  it('handles a property with no loan (interest, principal, and debt service all zero)', async () => {
+    const property = await createProperty({ name: 'No Loan Test', address: 'x' })
+
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 500000, recurring: true, source: 'extracted' },
+        { propertyId: property.id, month: '2026-03', category: 'expense', accountItem: 'Utilities', amount: 20000, recurring: true, source: 'extracted' },
+      ],
+    })
+
+    await upsertAnnualCost({ propertyId: property.id, costType: 'tax', year: 2026, annualAmount: 120000 })
+    await upsertAnnualCost({ propertyId: property.id, costType: 'insurance', year: 2026, annualAmount: 24000 })
+
+    const result = await getMonthlyFinancials(property.id, '2026-03')
+
+    expect(result.income).toBe(500000)
+    expect(result.operatingExpenses).toBe(20000)
+    expect(result.noi).toBe(480000)
+    expect(result.interestExpense).toBe(0)
+    expect(result.principalPaydown).toBe(0)
+    expect(result.debtService).toBe(0)
+
+    const expectedPreTaxCashFlow = result.noi - result.amortizedTax - result.amortizedInsurance
+    expect(result.preTaxCashFlow).toBeCloseTo(expectedPreTaxCashFlow, 1)
+  })
+
+  it('handles a month with no financial records without throwing', async () => {
+    const property = await createProperty({ name: 'Empty Month Test', address: 'x' })
+
+    const result = await getMonthlyFinancials(property.id, '2026-04')
+
+    expect(result.income).toBe(0)
+    expect(result.operatingExpenses).toBe(0)
+    expect(result.noi).toBe(0)
+  })
+
   afterAll(async () => {
     await db.financialRecord.deleteMany({})
     await db.loan.deleteMany({})
     await db.annualCost.deleteMany({})
     await db.setting.deleteMany({ where: { key: 'marginalTaxRate' } })
-    await db.property.deleteMany({ where: { name: { in: ['Ide Calc Test', 'Loss Test'] } } })
+    await db.property.deleteMany({ where: { name: { in: ['Ide Calc Test', 'Loss Test', 'No Loan Test', 'Empty Month Test'] } } })
     await db.$disconnect()
   })
 })
