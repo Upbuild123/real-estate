@@ -20,10 +20,11 @@ In scope:
   each PDF.
 - Manual upload of loan documents (parsed the same way as statements) to
   capture loan balance, interest rate, and payment schedule per property.
-- Manual entry of annual property tax amounts, amortized monthly.
+- Manual entry of annual property tax and annual insurance (fire/earthquake)
+  amounts per property, each amortized monthly.
 - Monthly and year-to-date dashboards per property and combined across all
-  properties, including cash flow, interest expense, and tax amortization
-  against actuals.
+  properties, including pre-tax cash flow, after-tax cash flow, interest
+  expense, and tax/insurance amortization against actuals.
 - Rule-based anomaly detection (statistical deviation from trailing
   average, missing expected line items, missing monthly statement) with
   flags for follow-up.
@@ -55,7 +56,10 @@ dropbox-sync ──► raw PDF stored (blob storage) + DropboxFile record
 pdf-extraction (Claude API) ──► structured JSON (line items)
    │
    ▼
-financials (DB) ──linked to──► properties, loans, taxes
+financials (DB) ──linked to──► properties, loans, annual-costs
+   │
+   ▼
+tax-calculation (pre-tax / after-tax cash flow)
    │
    ▼
 anomaly-detection (rule engine) ──► flags
@@ -142,10 +146,33 @@ schema allows more for refinance history). Populated from uploaded loan
 PDFs via `pdf-extraction`. Used to compute monthly interest expense,
 principal paydown, and cash flow after debt service.
 
-### `taxes`
-Manually entered annual tax amount per property per tax year. Amortized
+### `annual-costs`
+Manually entered annual amounts per property per year, for two cost
+types: property tax and fire/earthquake insurance. Each is amortized
 evenly across 12 months for monthly comparison views (actual vs.
-amortized).
+amortized). Known starting values: Ide tax ¥227,900/yr, insurance
+¥46,040/yr; Residence DO5 tax ¥1,203,400/yr, insurance ¥117,402/yr.
+
+### `tax-calculation`
+Computes after-tax cash flow using a single, manually-set marginal tax
+rate (starting value: 43%) applied to taxable income per property per
+month:
+
+- **Taxable income** = NOI (rental income − operating expenses) − loan
+  interest expense − amortized property tax − amortized insurance.
+  Principal paydown is excluded — it is not a deductible expense for
+  tax purposes, even though it is a real cash outflow.
+- **Income tax owed** = taxable income × marginal rate (taxable income
+  floored at 0 for this purpose — no loss carryforward modeling in v1).
+- **Pre-tax cash flow** = NOI − full debt service (principal + interest)
+  − amortized tax − amortized insurance.
+- **After-tax cash flow** = pre-tax cash flow − income tax owed.
+
+The marginal rate is a single editable setting (not per-property, not
+time-varying in v1) stored alongside the other manually-entered figures.
+Depreciation is out of scope for v1 — not requested, and would require
+building-value/land-value allocation and a depreciation schedule that
+adds real complexity without a stated need yet.
 
 ### `anomaly-detection`
 Deterministic rule engine (not LLM-based, for cost/consistency) run after
@@ -161,7 +188,8 @@ action.
 
 ### `dashboard`
 - Per-property monthly view: income, expenses (by category), NOI, debt
-  service, cash flow, tax amortization vs. actual, active flags.
+  service, pre-tax cash flow, after-tax cash flow, tax/insurance
+  amortization vs. actual, active flags.
 - Per-property YTD view: same metrics aggregated year-to-date, with
   month-over-month trend.
 - Portfolio view: all properties combined, monthly and YTD.
@@ -173,7 +201,9 @@ action.
 - `Property` (id, name, address, active)
 - `Loan` (id, propertyId, originalAmount, currentBalance, interestRate,
   monthlyPayment, startDate, sourceFileId)
-- `TaxRecord` (id, propertyId, taxYear, annualAmount)
+- `AnnualCost` (id, propertyId, costType: tax|insurance, year,
+  annualAmount)
+- `Setting` (key, value) — e.g. `marginalTaxRate` (single global value)
 - `DropboxFile` (id, propertyId, dropboxFileId, filename, uploadedAt,
   fileType: statement|loan, storageUrl)
 - `Extraction` (id, dropboxFileId, rawModelOutput, extractedAt, status)
@@ -197,8 +227,10 @@ action.
 
 - Unit tests for anomaly rule engine (given fixture financial records,
   correct flags produced).
-- Unit tests for tax amortization math and loan interest/cash-flow
-  calculations.
+- Unit tests for tax/insurance amortization math, loan interest/cash-flow
+  calculations, and pre-tax/after-tax cash flow calculations (including
+  the taxable-income floor-at-zero case and principal exclusion from the
+  tax base).
 - Integration test for the extraction pipeline using fixture PDFs and
   mocked Claude responses (verify schema parsing, not model accuracy).
 - Manual verification pass on real (redacted) property manager PDFs before
