@@ -87,6 +87,7 @@ export async function ingestStatement(params: {
       category: item.category,
       accountItem: item.accountItem,
       lineItemKey,
+      note: item.note,
       amount: item.total,
       recurring: isRecurringAccountItem(item.accountItem),
       source: 'extracted' as const,

@@ -38,6 +38,7 @@ describe('ingestStatement', () => {
     expect(records.find((r) => r.accountItem === 'Property management fee')?.recurring).toBe(true)
     expect(records.every((r) => r.month === '2026-01')).toBe(true)
     expect(records.every((r) => r.source === 'extracted')).toBe(true)
+    expect(records.find((r) => r.accountItem === 'Rent')?.note).toBe('101-ZHU JIAOJIAO 2026-02分Rent')
   })
 
   it('preserves a manual correction when the same file is re-ingested', async () => {

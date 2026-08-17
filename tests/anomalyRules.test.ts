@@ -104,6 +104,72 @@ describe('runAnomalyRules', () => {
     expect(allFlags[0].description).toContain('Water charge')
   })
 
+  it('flags a renewal fee expense that exceeds 52.5% of the renewal fee income for the same room', async () => {
+    const property = await createProperty({ name: 'Renewal Overcharge Test', address: 'x' })
+    await db.financialRecord.create({
+      data: {
+        propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Renewal fee income',
+        amount: 66000, recurring: false, lineItemKey: 'renewal-income-402', source: 'extracted',
+        note: '402-二瓶　宙 更新料【更新時請求】',
+      },
+    })
+    await db.financialRecord.create({
+      data: {
+        propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Renewal fee',
+        amount: 36300, recurring: false, lineItemKey: 'renewal-expense-402', source: 'extracted',
+        note: '402-二瓶　宙 更新事務手数料【更新時請求】',
+      }, // 36300 / 66000 = 55%, over the 52.5% threshold
+    })
+
+    const flags = await runAnomalyRules(property.id, '2026-02')
+
+    expect(flags.some((f) => f.ruleType === 'renewal_fee_overcharge' && f.description.includes('402'))).toBe(true)
+  })
+
+  it('does not flag a renewal fee expense at or under 52.5% of income for the same room', async () => {
+    const property = await createProperty({ name: 'Renewal Normal Test', address: 'x' })
+    await db.financialRecord.create({
+      data: {
+        propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Renewal fee income',
+        amount: 66000, recurring: false, lineItemKey: 'renewal-income-501', source: 'extracted',
+        note: '501-梶川　あかり 更新料【更新時請求】',
+      },
+    })
+    await db.financialRecord.create({
+      data: {
+        propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Renewal fee',
+        amount: 34650, recurring: false, lineItemKey: 'renewal-expense-501', source: 'extracted',
+        note: '501-梶川　あかり 更新事務手数料【更新時請求】',
+      }, // exactly 52.5%
+    })
+
+    const flags = await runAnomalyRules(property.id, '2026-02')
+
+    expect(flags.some((f) => f.ruleType === 'renewal_fee_overcharge')).toBe(false)
+  })
+
+  it('does not flag renewal fees for different rooms against each other', async () => {
+    const property = await createProperty({ name: 'Renewal Different Rooms Test', address: 'x' })
+    await db.financialRecord.create({
+      data: {
+        propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Renewal fee income',
+        amount: 10000, recurring: false, lineItemKey: 'renewal-income-101', source: 'extracted',
+        note: '101-Tenant A 更新料',
+      },
+    })
+    await db.financialRecord.create({
+      data: {
+        propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Renewal fee',
+        amount: 36300, recurring: false, lineItemKey: 'renewal-expense-402', source: 'extracted',
+        note: '402-Tenant B 更新事務手数料',
+      }, // a different room's expense — 36300/10000 would be way over threshold if wrongly paired
+    })
+
+    const flags = await runAnomalyRules(property.id, '2026-02')
+
+    expect(flags.some((f) => f.ruleType === 'renewal_fee_overcharge')).toBe(false)
+  })
+
   afterAll(async () => {
     await db.anomalyFlag.deleteMany({})
     await db.financialRecord.deleteMany({})
@@ -118,6 +184,9 @@ describe('runAnomalyRules', () => {
             'Negative Cashflow Test',
             'Dedupe Test',
             'Multi Deviation Test',
+            'Renewal Overcharge Test',
+            'Renewal Normal Test',
+            'Renewal Different Rooms Test',
           ],
         },
       },

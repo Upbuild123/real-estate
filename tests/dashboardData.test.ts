@@ -1,7 +1,13 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { db } from '../lib/db'
 import { createProperty } from '../lib/properties'
-import { getPropertyMonthlyDashboard, getPropertyYtdDashboard, getPortfolioDashboard } from '../lib/dashboardData'
+import {
+  getPropertyMonthlyDashboard,
+  getPropertyYtdDashboard,
+  getPortfolioDashboard,
+  getPropertyRangeDashboard,
+  getEarliestMonthWithData,
+} from '../lib/dashboardData'
 
 describe('dashboardData', () => {
   it('returns monthly financials plus open anomaly flags for a property', async () => {
@@ -61,11 +67,66 @@ describe('dashboardData', () => {
     expect(result.income).toBeGreaterThanOrEqual(300000)
   })
 
+  it('sums financials across an arbitrary list of months (getPropertyRangeDashboard)', async () => {
+    const property = await createProperty({ name: 'Dash Range Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2025-11', category: 'income', accountItem: 'Rent', amount: 50000, recurring: true, lineItemKey: 'test-key-7', source: 'extracted' },
+        { propertyId: property.id, month: '2025-12', category: 'income', accountItem: 'Rent', amount: 60000, recurring: true, lineItemKey: 'test-key-8', source: 'extracted' },
+        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 999999, recurring: true, lineItemKey: 'test-key-9', source: 'extracted' }, // excluded, not in the requested range
+      ],
+    })
+    await db.anomalyFlag.create({
+      data: { propertyId: property.id, month: '2025-12', ruleType: 'negative_cash_flow', description: 'test flag', status: 'open' },
+    })
+
+    const result = await getPropertyRangeDashboard(property.id, ['2025-11', '2025-12'])
+    expect(result.income).toBe(110000)
+    expect(result.flags).toHaveLength(1)
+
+    await db.anomalyFlag.deleteMany({ where: { propertyId: property.id } })
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('returns the earliest month with any FinancialRecord for a property', async () => {
+    const property = await createProperty({ name: 'Dash Earliest Month Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'k10', source: 'extracted' },
+        { propertyId: property.id, month: '2025-06', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'k11', source: 'extracted' },
+      ],
+    })
+
+    expect(await getEarliestMonthWithData(property.id)).toBe('2025-06')
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('returns null for a property with no financial records', async () => {
+    const property = await createProperty({ name: 'Dash No Data Test', address: 'x' })
+    expect(await getEarliestMonthWithData(property.id)).toBeNull()
+    await db.property.delete({ where: { id: property.id } })
+  })
+
   afterAll(async () => {
     await db.anomalyFlag.deleteMany({})
     await db.financialRecord.deleteMany({})
     await db.property.deleteMany({
-      where: { name: { in: ['Dash Monthly Test', 'Dash YTD Test', 'Portfolio A', 'Portfolio B'] } },
+      where: {
+        name: {
+          in: [
+            'Dash Monthly Test',
+            'Dash YTD Test',
+            'Portfolio A',
+            'Portfolio B',
+            'Dash Range Test',
+            'Dash Earliest Month Test',
+            'Dash No Data Test',
+          ],
+        },
+      },
     })
     await db.$disconnect()
   })

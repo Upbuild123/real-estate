@@ -1,0 +1,107 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--table-border);
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 10px 18px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted-text);
+  border-bottom: 2px solid transparent;
+}
+
+.tabActive {
+  color: var(--foreground);
+  border-bottom-color: var(--accent);
+}
+
+.periodRow {
+  margin-bottom: 20px;
+}
+
+.periodSelect {
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--table-border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-text);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--table-border);
+}
+
+.table th:last-child,
+.table td:last-child {
+  text-align: right;
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--table-row-border);
+}
+
+.table tbody tr:nth-child(even) {
+  background: var(--table-stripe);
+}
+
+.totalRow td {
+  font-weight: 700;
+  border-top: 1px solid var(--table-border);
+  border-bottom: 1px solid var(--table-border);
+}
+
+.negative {
+  color: var(--negative);
+}
+
+.flagsSection {
+  margin-top: 28px;
+}
+
+.flagsSection h2 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.flagsSection ul {
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.flagsSection li {
+  color: var(--flag-text);
+}
+
+.empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted-text);
+}

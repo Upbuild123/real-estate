@@ -87,6 +87,7 @@ model FinancialRecord {
   category      String      // "income" | "expense"
   accountItem   String
   lineItemKey   String      // deterministic identity for this specific line item within its extraction (accountItem|settlementDate|note), lets re-ingestion tell which extracted line a manual correction supersedes
+  note          String?     // raw note from the source statement line item (often contains a room/unit identifier, e.g. "402-二瓶　宙 ..."), used to correlate related income/expense lines for the same unit
   amount        Int
   recurring     Boolean
   source        String      // "extracted" | "manual"

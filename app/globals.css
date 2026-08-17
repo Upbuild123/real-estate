@@ -1,12 +1,26 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --muted-text: #666666;
+  --accent: #171717;
+  --table-border: #d0d0d0;
+  --table-row-border: #eaeaea;
+  --table-stripe: #f7f7f7;
+  --negative: #b3261e;
+  --flag-text: #b3261e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --muted-text: #9a9a9a;
+    --accent: #ededed;
+    --table-border: #333333;
+    --table-row-border: #232323;
+    --table-stripe: #161616;
+    --negative: #ff6b6b;
+    --flag-text: #ff6b6b;
   }
 }
 

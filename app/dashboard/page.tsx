@@ -1,44 +1,51 @@
 import { listProperties } from '../../lib/properties'
-import { getPropertyMonthlyDashboard, getPropertyYtdDashboard } from '../../lib/dashboardData'
+import { getPropertyRangeDashboard, getEarliestMonthWithData } from '../../lib/dashboardData'
+import { parsePeriod, listPeriodOptions } from '../../lib/periods'
 import { DashboardView } from './DashboardView'
+import styles from './dashboard.module.css'
 
 // This page reads live DB state (financials, anomaly flags) and per-request query params
-// (propertyId/month) — it must never be statically prerendered at build time.
+// (propertyId/period) — it must never be statically prerendered at build time.
 export const dynamic = 'force-dynamic'
+
+const PERIOD_PATTERN = /^\d{4}-(\d{2}|full|ytd)$/
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ propertyId?: string; month?: string }>
+  searchParams: Promise<{ propertyId?: string; period?: string }>
 }) {
   const resolvedSearchParams = await searchParams
   const properties = await listProperties()
-  const month = resolvedSearchParams.month ?? new Date().toISOString().slice(0, 7)
   const propertyId = resolvedSearchParams.propertyId ?? properties[0]?.id
 
   if (!propertyId) {
-    return <p>No properties found. Add a property to get started.</p>
+    return <p className={styles.empty}>No properties found. Add a property to get started.</p>
   }
 
-  // Note: `month` is not format-validated here (unlike app/api/dashboard/route.ts, which
-  // rejects malformed values with a 400). A malformed month would silently produce NaN
-  // year/monthNum below. Not fixed here since this is a server component, not a JSON API,
-  // and a 400-style error response doesn't fit this context as cleanly.
-  const year = parseInt(month.split('-')[0], 10)
-  const monthNum = parseInt(month.split('-')[1], 10)
+  const earliestMonth = (await getEarliestMonthWithData(propertyId)) ?? new Date().toISOString().slice(0, 7)
+  const periodOptions = listPeriodOptions({ earliestMonth })
 
-  const [monthly, ytd] = await Promise.all([
-    getPropertyMonthlyDashboard(propertyId, month),
-    getPropertyYtdDashboard(propertyId, year, monthNum),
-  ])
+  const requestedPeriod = resolvedSearchParams.period
+  const period =
+    requestedPeriod && PERIOD_PATTERN.test(requestedPeriod) ? requestedPeriod : periodOptions[0]?.value ?? earliestMonth
+
+  let months: string[]
+  try {
+    months = parsePeriod(period)
+  } catch {
+    months = parsePeriod(periodOptions[0]?.value ?? earliestMonth)
+  }
+
+  const dashboard = await getPropertyRangeDashboard(propertyId, months)
 
   return (
     <DashboardView
       properties={properties.map((p) => ({ id: p.id, name: p.name }))}
       selectedPropertyId={propertyId}
-      month={month}
-      monthly={monthly}
-      ytd={ytd}
+      period={period}
+      periodOptions={periodOptions}
+      dashboard={dashboard}
     />
   )
 }

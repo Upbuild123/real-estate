@@ -49,6 +49,30 @@ export async function getPropertyYtdDashboard(
   return total
 }
 
+export async function getPropertyRangeDashboard(
+  propertyId: string,
+  months: string[]
+): Promise<MonthlyFinancials & { flags: AnomalyFlag[] }> {
+  let total = { ...ZERO_FINANCIALS }
+  for (const month of months) {
+    const financials = await getMonthlyFinancials(propertyId, month)
+    total = sumFinancials(total, financials)
+  }
+  const flags = await db.anomalyFlag.findMany({ where: { propertyId, month: { in: months }, status: 'open' } })
+  return { ...total, flags }
+}
+
+// The earliest month with any FinancialRecord for this property, used to bound how far back
+// the period selector offers individual months/full years. Null if the property has no data yet.
+export async function getEarliestMonthWithData(propertyId: string): Promise<string | null> {
+  const record = await db.financialRecord.findFirst({
+    where: { propertyId },
+    orderBy: { month: 'asc' },
+    select: { month: true },
+  })
+  return record?.month ?? null
+}
+
 export async function getPortfolioDashboard(
   month: string
 ): Promise<MonthlyFinancials & { perProperty: { propertyId: string; propertyName: string; financials: MonthlyFinancials }[] }> {
