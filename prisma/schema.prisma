@@ -8,10 +8,11 @@ datasource db {
 }
 
 model Property {
-  id             String         @id @default(cuid())
-  name           String
-  address        String
-  active         Boolean        @default(true)
+  id                 String         @id @default(cuid())
+  name               String
+  address            String
+  dropboxFolderPath  String?
+  active             Boolean        @default(true)
   createdAt      DateTime       @default(now())
   loans          Loan[]
   annualCosts    AnnualCost[]

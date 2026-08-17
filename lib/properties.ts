@@ -1,7 +1,11 @@
 import { db } from './db'
 import type { Property } from '@prisma/client'
 
-export async function createProperty(input: { name: string; address: string }): Promise<Property> {
+export async function createProperty(input: {
+  name: string
+  address: string
+  dropboxFolderPath?: string
+}): Promise<Property> {
   return db.property.create({ data: input })
 }
 

@@ -9,6 +9,15 @@ describe('properties', () => {
     expect(found?.name).toBe('Ide building')
   })
 
+  it('stores an optional dropboxFolderPath', async () => {
+    const created = await createProperty({
+      name: 'Ide building',
+      address: 'x',
+      dropboxFolderPath: '/Michael Sloyer/Ide building/2026',
+    })
+    expect(created.dropboxFolderPath).toBe('/Michael Sloyer/Ide building/2026')
+  })
+
   it('lists only active properties by default', async () => {
     const p = await createProperty({ name: 'Inactive Test', address: 'x' })
     await db.property.update({ where: { id: p.id }, data: { active: false } })

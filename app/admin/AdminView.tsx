@@ -44,13 +44,15 @@ function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
   const { message, isError, submit } = useSubmitState()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [dropboxFolderPath, setDropboxFolderPath] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const ok = await submit('/api/properties', { name, address })
+    const ok = await submit('/api/properties', { name, address, dropboxFolderPath: dropboxFolderPath || undefined })
     if (ok) {
       setName('')
       setAddress('')
+      setDropboxFolderPath('')
       onSaved()
     }
   }
@@ -65,6 +67,10 @@ function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
       <label>
         Address
         <input value={address} onChange={(e) => setAddress(e.target.value)} required />
+      </label>
+      <label>
+        Dropbox Folder Path (optional, e.g. /Michael Sloyer/Ide building/2026)
+        <input value={dropboxFolderPath} onChange={(e) => setDropboxFolderPath(e.target.value)} />
       </label>
       <button type="submit">Add Property</button>
       <StatusLine message={message} isError={isError} />
