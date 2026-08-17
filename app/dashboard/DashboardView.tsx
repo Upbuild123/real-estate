@@ -1,9 +1,11 @@
 'use client'
 
+import { Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
 import type { PeriodOption } from '../../lib/periods'
+import type { RoomBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
 import type { AnomalyFlag } from '@prisma/client'
 import { formatYenCompact } from '../../lib/formatYen'
 import styles from './dashboard.module.css'
@@ -30,12 +32,91 @@ function formatCell(value: number): { text: string; negative: boolean } {
   return { text: formatYenCompact(value), negative: false }
 }
 
+function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
+  if (entries.length === 0) return null
+
+  const rooms = new Map<string, RoomBreakdownEntry[]>()
+  for (const entry of entries) {
+    const list = rooms.get(entry.room) ?? []
+    list.push(entry)
+    rooms.set(entry.room, list)
+  }
+
+  return (
+    <>
+      <h2 className={styles.sectionTitle}>By Room</h2>
+      <p className={styles.sectionHint}>
+        Only line items linked to a specific unit are shown here; building-wide costs (PM fee, utilities, cleaning)
+        appear in Expenses by Category below.
+      </p>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Room / Item</th>
+            <th>Yen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from(rooms.entries()).map(([room, items]) => (
+            <Fragment key={room}>
+              <tr className={styles.roomGroupLabel}>
+                <td colSpan={2}>Room {room}</td>
+              </tr>
+              {items.map((item) => {
+                const { text, negative } = formatCell(item.category === 'expense' ? -item.amount : item.amount)
+                return (
+                  <tr key={`${room}-${item.accountItem}-${item.category}`}>
+                    <td className={styles.itemLabel}>{item.accountItem}</td>
+                    <td className={negative ? styles.negative : undefined}>{text}</td>
+                  </tr>
+                )
+              })}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
+function ExpenseBreakdownTable({ entries }: { entries: ExpenseBreakdownEntry[] }) {
+  if (entries.length === 0) return null
+
+  return (
+    <>
+      <h2 className={styles.sectionTitle}>Expenses by Category</h2>
+      <p className={styles.sectionHint}>
+        ⚠ marks anything out of the ordinary — normal recurring costs (rent, PM fee, elevator, cleaning, utilities)
+        aren&apos;t flagged.
+      </p>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Yen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={entry.accountItem} className={entry.recurring ? undefined : styles.flaggedRow}>
+              <td>{entry.accountItem}</td>
+              <td>{formatYenCompact(entry.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
 export function DashboardView(props: {
   properties: { id: string; name: string }[]
   selectedPropertyId: string
   period: string
   periodOptions: PeriodOption[]
   dashboard: MonthlyFinancials & { flags: AnomalyFlag[] }
+  roomBreakdown: RoomBreakdownEntry[]
+  expenseBreakdown: ExpenseBreakdownEntry[]
 }) {
   const router = useRouter()
 
@@ -97,6 +178,9 @@ export function DashboardView(props: {
           </ul>
         </div>
       )}
+
+      <RoomBreakdownTable entries={props.roomBreakdown} />
+      <ExpenseBreakdownTable entries={props.expenseBreakdown} />
     </div>
   )
 }

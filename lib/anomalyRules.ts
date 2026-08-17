@@ -1,15 +1,9 @@
 import { db } from './db'
+import { extractRoomToken } from './roomToken'
 import type { AnomalyFlag } from '@prisma/client'
 
 const DEVIATION_THRESHOLD = 0.5 // 50%
 const RENEWAL_FEE_RATIO_THRESHOLD = 0.525 // 52.5% — the property manager's contracted rate; occasional overcharges to 55% are the thing this rule catches
-
-// Notes on real statement line items lead with a room/unit token before a dash,
-// e.g. "402-二瓶　宙 更新事務手数料【更新時請求】" or "5区画-伊藤　智子 更新料【更新時請求】".
-function extractRoomToken(note: string): string | null {
-  const match = note.match(/^([^\s-]+)-/)
-  return match ? match[1] : null
-}
 
 function previousMonths(month: string, count: number): string[] {
   const [year, mo] = month.split('-').map(Number)
@@ -139,6 +133,25 @@ async function checkRenewalFeeRatio(propertyId: string, month: string): Promise<
   return flag ? [flag] : []
 }
 
+// "Normal" activity is whatever isRecurringAccountItem (lib/extraction/statementSchema.ts)
+// classifies as recurring — rent, PM fee, elevator fee, cleaning, utilities. Everything else
+// (renewal fees, repairs, co-agent fees, security deposits, capex, etc.) is out of the
+// ordinary and surfaced here for review, regardless of amount.
+async function checkNonRecurringItems(propertyId: string, month: string): Promise<AnomalyFlag[]> {
+  const records = await db.financialRecord.findMany({
+    where: { propertyId, month, recurring: false },
+  })
+
+  if (records.length === 0) return []
+
+  const descriptions = records.map(
+    (r) => `${r.category === 'income' ? '+' : '-'}${r.accountItem}: ${r.amount}${r.note ? ` (${r.note})` : ''}`
+  )
+
+  const flag = await createFlagIfNew(propertyId, month, 'non_recurring_item', descriptions.join('; '))
+  return flag ? [flag] : []
+}
+
 export async function runAnomalyRules(
   propertyId: string,
   month: string,
@@ -146,12 +159,13 @@ export async function runAnomalyRules(
 ): Promise<AnomalyFlag[]> {
   const today = options.today ?? new Date()
 
-  const [deviationFlags, missingFlags, cashFlowFlags, renewalFeeFlags] = await Promise.all([
+  const [deviationFlags, missingFlags, cashFlowFlags, renewalFeeFlags, nonRecurringFlags] = await Promise.all([
     checkExpenseDeviation(propertyId, month),
     checkMissingStatement(propertyId, month, today),
     checkNegativeCashFlow(propertyId, month),
     checkRenewalFeeRatio(propertyId, month),
+    checkNonRecurringItems(propertyId, month),
   ])
 
-  return [...deviationFlags, ...missingFlags, ...cashFlowFlags, ...renewalFeeFlags]
+  return [...deviationFlags, ...missingFlags, ...cashFlowFlags, ...renewalFeeFlags, ...nonRecurringFlags]
 }

@@ -1,5 +1,6 @@
 import { listProperties } from '../../lib/properties'
 import { getPropertyRangeDashboard, getEarliestMonthWithData } from '../../lib/dashboardData'
+import { getRoomBreakdown, getExpenseBreakdown } from '../../lib/lineItemBreakdown'
 import { parsePeriod, listPeriodOptions } from '../../lib/periods'
 import { DashboardView } from './DashboardView'
 import styles from './dashboard.module.css'
@@ -37,7 +38,11 @@ export default async function DashboardPage({
     months = parsePeriod(periodOptions[0]?.value ?? earliestMonth)
   }
 
-  const dashboard = await getPropertyRangeDashboard(propertyId, months)
+  const [dashboard, roomBreakdown, expenseBreakdown] = await Promise.all([
+    getPropertyRangeDashboard(propertyId, months),
+    getRoomBreakdown(propertyId, months),
+    getExpenseBreakdown(propertyId, months),
+  ])
 
   return (
     <DashboardView
@@ -46,6 +51,8 @@ export default async function DashboardPage({
       period={period}
       periodOptions={periodOptions}
       dashboard={dashboard}
+      roomBreakdown={roomBreakdown}
+      expenseBreakdown={expenseBreakdown}
     />
   )
 }

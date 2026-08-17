@@ -34,23 +34,25 @@ const SAMPLE_DASHBOARD = {
   ],
 }
 
+const DEFAULT_PROPS = {
+  properties: [
+    { id: 'p1', name: 'Ide building' },
+    { id: 'p2', name: 'Residence DO5' },
+  ],
+  selectedPropertyId: 'p1',
+  period: '2026-01',
+  periodOptions: [
+    { value: '2026-ytd', label: '2026 YTD' },
+    { value: '2026-01', label: 'January 2026' },
+  ],
+  dashboard: SAMPLE_DASHBOARD,
+  roomBreakdown: [],
+  expenseBreakdown: [],
+}
+
 describe('DashboardView', () => {
   it('renders rounded/compact NOI and cash flow figures, and open anomaly flags', () => {
-    render(
-      <DashboardView
-        properties={[
-          { id: 'p1', name: 'Ide building' },
-          { id: 'p2', name: 'Residence DO5' },
-        ]}
-        selectedPropertyId="p1"
-        period="2026-01"
-        periodOptions={[
-          { value: '2026-ytd', label: '2026 YTD' },
-          { value: '2026-01', label: 'January 2026' },
-        ]}
-        dashboard={SAMPLE_DASHBOARD}
-      />
-    )
+    render(<DashboardView {...DEFAULT_PROPS} />)
 
     // 808201 rounds to the nearest thousand and displays compact, not the raw number
     expect(screen.getByText('808K')).toBeInTheDocument()
@@ -60,52 +62,61 @@ describe('DashboardView', () => {
   })
 
   it('renders a tab per property, marking the selected one', () => {
-    render(
-      <DashboardView
-        properties={[
-          { id: 'p1', name: 'Ide building' },
-          { id: 'p2', name: 'Residence DO5' },
-        ]}
-        selectedPropertyId="p2"
-        period="2026-01"
-        periodOptions={[{ value: '2026-01', label: 'January 2026' }]}
-        dashboard={SAMPLE_DASHBOARD}
-      />
-    )
+    render(<DashboardView {...DEFAULT_PROPS} selectedPropertyId="p2" />)
 
     expect(screen.getByText('Ide building')).toBeInTheDocument()
     expect(screen.getByText('Residence DO5')).toBeInTheDocument()
   })
 
   it('renders every period option in the selector', () => {
-    render(
-      <DashboardView
-        properties={[{ id: 'p1', name: 'Ide building' }]}
-        selectedPropertyId="p1"
-        period="2026-ytd"
-        periodOptions={[
-          { value: '2026-ytd', label: '2026 YTD' },
-          { value: '2025-full', label: '2025 Full Year' },
-        ]}
-        dashboard={SAMPLE_DASHBOARD}
-      />
-    )
+    render(<DashboardView {...DEFAULT_PROPS} />)
 
     expect(screen.getByText('2026 YTD')).toBeInTheDocument()
-    expect(screen.getByText('2025 Full Year')).toBeInTheDocument()
+    expect(screen.getByText('January 2026')).toBeInTheDocument()
   })
 
   it('does not render a Flags section when there are no open flags', () => {
+    render(<DashboardView {...DEFAULT_PROPS} dashboard={{ ...SAMPLE_DASHBOARD, flags: [] }} />)
+
+    expect(screen.queryByText('Flags')).not.toBeInTheDocument()
+  })
+
+  it('groups room breakdown entries under a room header', () => {
     render(
       <DashboardView
-        properties={[{ id: 'p1', name: 'Ide building' }]}
-        selectedPropertyId="p1"
-        period="2026-01"
-        periodOptions={[{ value: '2026-01', label: 'January 2026' }]}
-        dashboard={{ ...SAMPLE_DASHBOARD, flags: [] }}
+        {...DEFAULT_PROPS}
+        roomBreakdown={[
+          { room: '101', accountItem: 'Rent', category: 'income', amount: 125000 },
+          { room: '101', accountItem: 'Repair expense', category: 'expense', amount: 20000 },
+        ]}
       />
     )
 
-    expect(screen.queryByText('Flags')).not.toBeInTheDocument()
+    expect(screen.getByText('Room 101')).toBeInTheDocument()
+    expect(screen.getByText('Rent')).toBeInTheDocument()
+    expect(screen.getByText('Repair expense')).toBeInTheDocument()
+    expect(screen.getByText('125K')).toBeInTheDocument()
+  })
+
+  it('does not render the By Room section when there is no room breakdown data', () => {
+    render(<DashboardView {...DEFAULT_PROPS} roomBreakdown={[]} />)
+    expect(screen.queryByText('By Room')).not.toBeInTheDocument()
+  })
+
+  it('renders the expense breakdown with normal categories unmarked', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true }]}
+      />
+    )
+
+    expect(screen.getByText('Expenses by Category')).toBeInTheDocument()
+    expect(screen.getByText('Property management fee')).toBeInTheDocument()
+  })
+
+  it('does not render the Expenses by Category section when there is no expense breakdown data', () => {
+    render(<DashboardView {...DEFAULT_PROPS} expenseBreakdown={[]} />)
+    expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
   })
 })

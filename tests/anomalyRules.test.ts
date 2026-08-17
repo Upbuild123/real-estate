@@ -170,6 +170,40 @@ describe('runAnomalyRules', () => {
     expect(flags.some((f) => f.ruleType === 'renewal_fee_overcharge')).toBe(false)
   })
 
+  it('flags any non-recurring line item present in the month (renewal fees, repairs, co-agent fees, deposits, etc.)', async () => {
+    const property = await createProperty({ name: 'Non Recurring Test', address: 'x' })
+    await db.financialRecord.create({
+      data: { propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Repair expense', amount: 78870, recurring: false, lineItemKey: 'nr-1', source: 'extracted', note: 'water leakage repair' },
+    })
+    await db.financialRecord.create({
+      data: { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Deposit', amount: 139000, recurring: false, lineItemKey: 'nr-2', source: 'extracted', note: '101-NGUYENTHI VAN deposit' },
+    })
+
+    const flags = await runAnomalyRules(property.id, '2026-02')
+
+    const flag = flags.find((f) => f.ruleType === 'non_recurring_item')
+    expect(flag).toBeDefined()
+    expect(flag!.description).toContain('Repair expense')
+    expect(flag!.description).toContain('Deposit')
+  })
+
+  it('does not flag normal recurring categories (rent, PM fee, elevator fee, cleaning, utilities) as non-recurring', async () => {
+    const property = await createProperty({ name: 'Recurring Only Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'ro-1', source: 'extracted' },
+        { propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Property management fee', amount: 40000, recurring: true, lineItemKey: 'ro-2', source: 'extracted' },
+        { propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Elevator maintenance fee', amount: 13000, recurring: true, lineItemKey: 'ro-3', source: 'extracted' },
+        { propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Regular cleaning', amount: 30000, recurring: true, lineItemKey: 'ro-4', source: 'extracted' },
+        { propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Electricity charge', amount: 9000, recurring: true, lineItemKey: 'ro-5', source: 'extracted' },
+      ],
+    })
+
+    const flags = await runAnomalyRules(property.id, '2026-02')
+
+    expect(flags.some((f) => f.ruleType === 'non_recurring_item')).toBe(false)
+  })
+
   afterAll(async () => {
     await db.anomalyFlag.deleteMany({})
     await db.financialRecord.deleteMany({})
@@ -187,6 +221,8 @@ describe('runAnomalyRules', () => {
             'Renewal Overcharge Test',
             'Renewal Normal Test',
             'Renewal Different Rooms Test',
+            'Non Recurring Test',
+            'Recurring Only Test',
           ],
         },
       },
