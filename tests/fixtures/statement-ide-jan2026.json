@@ -1,0 +1,49 @@
+{
+  "propertyName": "Ide building",
+  "activityMonth": "2026-01",
+  "remittanceDate": "2026-02-15",
+  "netRemittanceAmount": 778201,
+  "rentRoll": [
+    {
+      "unitType": "Residence",
+      "roomNumber": "101",
+      "lessee": "ZHU JIAOJIAO",
+      "monthlyCharge": 125000,
+      "rentCollected": 125000,
+      "arrearsCurrentMonth": 0,
+      "arrearsTotal": 0,
+      "depositBalance": 119000,
+      "leaseStart": "2024-03-28",
+      "leaseEnd": "2026-03-27"
+    }
+  ],
+  "lineItems": [
+    {
+      "category": "income",
+      "accountItem": "Rent",
+      "settlementDate": "2026-01-30",
+      "amount": 125000,
+      "tax": 0,
+      "total": 125000,
+      "note": "101-ZHU JIAOJIAO 2026-02分Rent"
+    },
+    {
+      "category": "expense",
+      "accountItem": "Property management fee",
+      "settlementDate": "2026-02-15",
+      "amount": 37339,
+      "tax": 3734,
+      "total": 41073,
+      "note": "2026-02 井手ビル 管理委託料支払い"
+    },
+    {
+      "category": "expense",
+      "accountItem": "Regular cleaning",
+      "settlementDate": "2026-02-15",
+      "amount": 27273,
+      "tax": 2727,
+      "total": 30000,
+      "note": "2026-02 井手ビル Dairy cleaning"
+    }
+  ]
+}
