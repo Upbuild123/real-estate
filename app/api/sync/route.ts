@@ -1,6 +1,11 @@
 import { syncDropboxFolder } from '../../../lib/dropboxSync'
 import { getProperty } from '../../../lib/properties'
 
+// Syncing a folder with several new statements means several sequential Claude extraction
+// calls plus Dropbox downloads — this can comfortably exceed the default serverless timeout.
+// Capped to whatever the actual Vercel plan allows; safe to request more than the plan grants.
+export const maxDuration = 300
+
 export async function POST(request: Request) {
   let body: any
   try {

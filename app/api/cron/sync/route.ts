@@ -1,6 +1,11 @@
 import { syncDropboxFolder } from '../../../../lib/dropboxSync'
 import { listProperties } from '../../../../lib/properties'
 
+// Syncs every property sequentially, each involving several Claude extraction calls — this
+// can comfortably exceed the default serverless timeout. Capped to whatever the actual
+// Vercel plan allows; safe to request more than the plan grants.
+export const maxDuration = 300
+
 // Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}` on scheduled invocations
 // (see vercel.json). This also lets us trigger a manual sync-all by hitting the route
 // with the same header.
