@@ -17,4 +17,38 @@ describe('POST /api/loans/upload', () => {
     const body = await response.json()
     expect(body).toEqual({ status: 'success', loanId: 'loan-1' })
   })
+
+  it('returns 400 when propertyId is missing', async () => {
+    const formData = new FormData()
+    formData.append('file', new Blob([new Uint8Array([1, 2, 3])], { type: 'application/pdf' }), 'loan.pdf')
+
+    const request = new Request('http://localhost/api/loans/upload', { method: 'POST', body: formData })
+    const response = await POST(request)
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBeTruthy()
+  })
+
+  it('returns 400 when file is missing', async () => {
+    const formData = new FormData()
+    formData.append('propertyId', 'prop-1')
+
+    const request = new Request('http://localhost/api/loans/upload', { method: 'POST', body: formData })
+    const response = await POST(request)
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBeTruthy()
+  })
+
+  it('returns 400 when file field is not an actual file', async () => {
+    const formData = new FormData()
+    formData.append('propertyId', 'prop-1')
+    formData.append('file', 'not-a-file')
+
+    const request = new Request('http://localhost/api/loans/upload', { method: 'POST', body: formData })
+    const response = await POST(request)
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBeTruthy()
+  })
 })
