@@ -9,7 +9,7 @@ export async function ingestStatement(params: {
   propertyId: string
   pdfBase64: string
 }): Promise<
-  | { status: 'success'; extractionId: string; recordsCreated: number }
+  | { status: 'success'; extractionId: string; recordsCreated: number; activityMonth: string }
   | { status: 'failed'; extractionId: string; error: string }
 > {
   let extracted: StatementExtraction
@@ -24,8 +24,10 @@ export async function ingestStatement(params: {
     rawOutput = JSON.stringify(extracted)
   } catch (err) {
     const message = err instanceof ExtractionParseError ? err.message : String(err)
-    const extraction = await db.extraction.create({
-      data: { dropboxFileId: params.dropboxFileId, rawModelOutput: message, status: 'failed' },
+    const extraction = await db.extraction.upsert({
+      where: { dropboxFileId: params.dropboxFileId },
+      update: { rawModelOutput: message, status: 'failed', extractedAt: new Date() },
+      create: { dropboxFileId: params.dropboxFileId, rawModelOutput: message, status: 'failed' },
     })
     return { status: 'failed', extractionId: extraction.id, error: message }
   }
@@ -41,46 +43,38 @@ export async function ingestStatement(params: {
         data: { dropboxFileId: params.dropboxFileId, rawModelOutput: rawOutput, status: 'success' },
       })
 
-  let recordsCreated = 0
-
-  for (const item of extracted.lineItems) {
-    const existingManual = await db.financialRecord.findFirst({
-      where: {
-        propertyId: params.propertyId,
-        extractionId: extraction.id,
-        accountItem: item.accountItem,
-        source: 'manual',
-      },
-    })
-    if (existingManual) continue // manual correction takes precedence, never overwritten
-
-    const existingExtracted = await db.financialRecord.findFirst({
-      where: {
-        propertyId: params.propertyId,
-        extractionId: extraction.id,
-        accountItem: item.accountItem,
-        source: 'extracted',
-      },
-    })
-
-    const data = {
+  // Real statements have MULTIPLE line items sharing the same accountItem (e.g. one
+  // "Rent" row per rental unit), so we do not dedupe/merge by accountItem. Instead, for
+  // a re-ingestion of the same extraction, we drop all previously-extracted rows and
+  // recreate them fresh from the current extraction output. Manual-source rows are never
+  // touched (they're filtered out of the delete), so manual corrections survive re-ingestion.
+  await db.financialRecord.deleteMany({
+    where: {
       propertyId: params.propertyId,
-      month: extracted.activityMonth,
-      category: item.category,
-      accountItem: item.accountItem,
-      amount: item.total,
-      recurring: isRecurringAccountItem(item.accountItem),
-      source: 'extracted' as const,
       extractionId: extraction.id,
-    }
+      source: 'extracted',
+    },
+  })
 
-    if (existingExtracted) {
-      await db.financialRecord.update({ where: { id: existingExtracted.id }, data })
-    } else {
-      await db.financialRecord.create({ data })
-      recordsCreated++
-    }
+  const recordsData = extracted.lineItems.map((item) => ({
+    propertyId: params.propertyId,
+    month: extracted.activityMonth,
+    category: item.category,
+    accountItem: item.accountItem,
+    amount: item.total,
+    recurring: isRecurringAccountItem(item.accountItem),
+    source: 'extracted' as const,
+    extractionId: extraction.id,
+  }))
+
+  if (recordsData.length > 0) {
+    await db.financialRecord.createMany({ data: recordsData })
   }
 
-  return { status: 'success', extractionId: extraction.id, recordsCreated }
+  return {
+    status: 'success',
+    extractionId: extraction.id,
+    recordsCreated: recordsData.length,
+    activityMonth: extracted.activityMonth,
+  }
 }

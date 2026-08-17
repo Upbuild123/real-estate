@@ -67,6 +67,75 @@ describe('ingestStatement', () => {
     expect(afterReingest.source).toBe('manual')
   })
 
+  it('keeps multiple line items with the same accountItem as separate records (one per rental unit)', async () => {
+    const property = await createProperty({ name: 'Ide Extract Test Multi Unit', address: 'x' })
+    const dropboxFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx-statement-multiunit',
+        filename: 'multi-unit.pdf',
+        uploadedAt: new Date(),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/x.pdf',
+      },
+    })
+
+    const multiUnitFixture = {
+      ...fixture,
+      lineItems: [
+        { ...fixture.lineItems[0], note: 'Unit 101 rent' },
+        { ...fixture.lineItems[0], amount: 98000, total: 98000, note: 'Unit 102 rent' },
+      ],
+    }
+    ;(extractStructuredDataFromPdf as any).mockResolvedValueOnce(multiUnitFixture)
+
+    const result = await ingestStatement({
+      dropboxFileId: dropboxFile.id,
+      propertyId: property.id,
+      pdfBase64: 'ZmFrZQ==',
+    })
+
+    expect(result.status).toBe('success')
+    const records = await db.financialRecord.findMany({ where: { propertyId: property.id, accountItem: 'Rent' } })
+    expect(records).toHaveLength(2)
+    const amounts = records.map((r) => r.amount).sort((a, b) => a - b)
+    expect(amounts).toEqual([98000, 125000])
+  })
+
+  it('re-ingesting a file that fails extraction twice returns a graceful failure both times, with one Extraction row', async () => {
+    ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json 1'))
+    const property = await createProperty({ name: 'Ide Extract Double Fail Test', address: 'x' })
+    const dropboxFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx-statement-double-fail',
+        filename: 'x.pdf',
+        uploadedAt: new Date(),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/x.pdf',
+      },
+    })
+
+    const first = await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    expect(first.status).toBe('failed')
+
+    ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json 2'))
+    let second: Awaited<ReturnType<typeof ingestStatement>> | undefined
+    let threw = false
+    try {
+      second = await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    } catch {
+      threw = true
+    }
+
+    expect(threw).toBe(false)
+    expect(second?.status).toBe('failed')
+
+    const extractions = await db.extraction.findMany({ where: { dropboxFileId: dropboxFile.id } })
+    expect(extractions).toHaveLength(1)
+    expect(extractions[0].status).toBe('failed')
+  })
+
   it('marks the extraction as failed and creates no records when the model output cannot be parsed', async () => {
     ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json'))
     const property = await createProperty({ name: 'Ide Extract Fail Test', address: 'x' })
@@ -95,7 +164,17 @@ describe('ingestStatement', () => {
     await db.extraction.deleteMany({})
     await db.dropboxFile.deleteMany({})
     await db.property.deleteMany({
-      where: { name: { in: ['Ide Extract Test', 'Ide Extract Test 2', 'Ide Extract Fail Test'] } },
+      where: {
+        name: {
+          in: [
+            'Ide Extract Test',
+            'Ide Extract Test 2',
+            'Ide Extract Fail Test',
+            'Ide Extract Test Multi Unit',
+            'Ide Extract Double Fail Test',
+          ],
+        },
+      },
     })
     await db.$disconnect()
   })

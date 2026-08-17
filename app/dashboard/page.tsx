@@ -15,6 +15,10 @@ export default async function DashboardPage({
     return <p>No properties found. Add a property to get started.</p>
   }
 
+  // Note: `month` is not format-validated here (unlike app/api/dashboard/route.ts, which
+  // rejects malformed values with a 400). A malformed month would silently produce NaN
+  // year/monthNum below. Not fixed here since this is a server component, not a JSON API,
+  // and a 400-style error response doesn't fit this context as cleanly.
   const year = parseInt(month.split('-')[0], 10)
   const monthNum = parseInt(month.split('-')[1], 10)
 

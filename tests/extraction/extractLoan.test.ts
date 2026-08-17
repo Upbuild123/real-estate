@@ -27,9 +27,22 @@ describe('ingestLoanDocument', () => {
     expect(loan?.newRate).toBe(2.075)
   })
 
+  it('does not create a duplicate Loan when the same dropboxFileId is re-processed', async () => {
+    const property = await createProperty({ name: 'DO5 Loan Dedupe Test', address: 'x' })
+
+    const first = await ingestLoanDocument({ dropboxFileId: 'dbx-loan-dedupe-1', propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    expect(first.status).toBe('success')
+
+    const second = await ingestLoanDocument({ dropboxFileId: 'dbx-loan-dedupe-1', propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    expect(second.status).toBe('success')
+
+    const loans = await db.loan.findMany({ where: { propertyId: property.id } })
+    expect(loans).toHaveLength(1)
+  })
+
   afterAll(async () => {
     await db.loan.deleteMany({})
-    await db.property.deleteMany({ where: { name: 'DO5 Loan Extract Test' } })
+    await db.property.deleteMany({ where: { name: { in: ['DO5 Loan Extract Test', 'DO5 Loan Dedupe Test'] } } })
     await db.$disconnect()
   })
 })

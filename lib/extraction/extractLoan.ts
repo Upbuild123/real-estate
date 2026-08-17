@@ -25,7 +25,7 @@ export async function ingestLoanDocument(params: {
 
   const firstRow = extracted.paymentSchedule[0]
 
-  const loan = await createLoan({
+  const loanData = {
     propertyId: params.propertyId,
     lender: extracted.lender,
     originalAmount: extracted.originalLoanAmount,
@@ -37,7 +37,19 @@ export async function ingestLoanDocument(params: {
     originationDate: new Date(extracted.originationDate),
     maturityDate: new Date(extracted.maturityDate),
     sourceFileId: params.dropboxFileId ?? undefined,
-  })
+  }
+
+  // Prevent duplicate Loan rows when the same Dropbox file is re-processed (e.g. a
+  // re-triggered sync). Manual uploads (dropboxFileId === null) always create a new row,
+  // since there's no reliable way to tell "same document re-uploaded" from "new document"
+  // without a source file identity to key on.
+  const existingLoan = params.dropboxFileId
+    ? await db.loan.findFirst({ where: { propertyId: params.propertyId, sourceFileId: params.dropboxFileId } })
+    : null
+
+  const loan = existingLoan
+    ? await db.loan.update({ where: { id: existingLoan.id }, data: loanData })
+    : await createLoan(loanData)
 
   return { status: 'success', loanId: loan.id }
 }
