@@ -83,12 +83,39 @@ Sends a PDF (property statement or loan document) to Claude with a
 structured-extraction prompt, requesting line items (category, description,
 amount, month) as JSON matching a defined schema. Two extraction types:
 - **Statement extraction**: income lines, expense lines, statement period,
-  property manager summary totals.
+  property manager summary totals, plus a per-unit rent roll (see below).
 - **Loan document extraction**: original loan amount, current balance,
   interest rate, monthly payment, principal/interest split if shown.
 
 Extraction results are stored alongside a reference to the source file for
 traceability, plus the raw model output for auditability/debugging.
+
+Both current properties are managed by the same property manager (Axios
+Management), whose statements follow one consistent bilingual
+(Japanese/English) PDF format — a summary + rent-roll page followed by an
+itemized transaction ledger. The statement schema below is derived from
+that format; details in
+`docs/superpowers/specs/sample-statement-format-notes.md`. A different
+property manager's format (for the third property) may require a second
+extraction template — the extraction prompt/schema should be keyed by
+property manager, not assumed universal.
+
+Statement extraction schema:
+- `activityMonth` — read from the statement's internal "Month" field, not
+  the filename or remittance date (statements are remitted, and named,
+  one month after the activity they cover).
+- `rentRoll[]` — per unit: type (residence/parking), lessee (or vacant),
+  monthly charge, rent collected, current/total arrears, deposit balance,
+  lease start/end. This is the primary source for vacancy and
+  delinquent-tenant anomaly signals.
+- `lineItems[]` — per transaction: category (income/expense), account
+  item, amount, tax, total, settlement date, note. Each line item is
+  tagged `recurring: true/false` via a deterministic lookup table (e.g.
+  rent, PM fee, utilities = recurring; renewal fees, deposits,
+  restoration costs, agent fees = one-time) applied during normalization,
+  not left to model judgment — this keeps anomaly detection consistent
+  and prevents normal one-time items (e.g. a security deposit) from being
+  flagged as expense/income anomalies.
 
 ### `financials`
 Normalized monthly income/expense records per property, derived from
