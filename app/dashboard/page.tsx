@@ -2,14 +2,19 @@ import { listProperties } from '../../lib/properties'
 import { getPropertyMonthlyDashboard, getPropertyYtdDashboard } from '../../lib/dashboardData'
 import { DashboardView } from './DashboardView'
 
+// This page reads live DB state (financials, anomaly flags) and per-request query params
+// (propertyId/month) — it must never be statically prerendered at build time.
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { propertyId?: string; month?: string }
+  searchParams: Promise<{ propertyId?: string; month?: string }>
 }) {
+  const resolvedSearchParams = await searchParams
   const properties = await listProperties()
-  const month = searchParams.month ?? new Date().toISOString().slice(0, 7)
-  const propertyId = searchParams.propertyId ?? properties[0]?.id
+  const month = resolvedSearchParams.month ?? new Date().toISOString().slice(0, 7)
+  const propertyId = resolvedSearchParams.propertyId ?? properties[0]?.id
 
   if (!propertyId) {
     return <p>No properties found. Add a property to get started.</p>
