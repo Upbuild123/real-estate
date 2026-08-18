@@ -113,7 +113,10 @@ model RentRollEntry {
   extraction    Extraction? @relation(fields: [extractionId], references: [id])
   createdAt     DateTime    @default(now())
 
-  @@unique([propertyId, month, roomNumber])
+  // Not unique on (propertyId, month, roomNumber): a mid-month tenant turnover can produce two
+  // rows for the same room in the same statement (outgoing tenant's lease ending, incoming
+  // tenant's lease starting) — both are real snapshots, not duplicates.
+  @@index([propertyId, month, roomNumber])
 }
 
 model AnomalyFlag {

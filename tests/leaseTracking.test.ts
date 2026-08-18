@@ -49,6 +49,27 @@ describe('getUpcomingLeaseExpirations', () => {
     await db.property.delete({ where: { id: property.id } })
   })
 
+  it('when a mid-month turnover leaves two rows for the same room/month, prefers the incoming tenant (latest leaseStart)', async () => {
+    const property = await createProperty({ name: 'Lease Test Turnover', address: 'x' })
+    const now = new Date('2026-01-01')
+
+    await db.rentRollEntry.createMany({
+      data: [
+        // Outgoing tenant's lease ends in 10 days — would be "upcoming" if picked
+        { propertyId: property.id, month: '2025-12', roomNumber: '301', unitType: 'Residence', lessee: 'Outgoing Tenant', monthlyCharge: 100000, leaseStart: '2020-01-01', leaseEnd: '2026-01-11' },
+        // Incoming tenant's lease starts later in the same month, ends far in the future
+        { propertyId: property.id, month: '2025-12', roomNumber: '301', unitType: 'Residence', lessee: 'Incoming Tenant', monthlyCharge: 100000, leaseStart: '2025-12-20', leaseEnd: '2028-12-19' },
+      ],
+    })
+
+    const result = await getUpcomingLeaseExpirations(property.id, now)
+
+    expect(result).toEqual([])
+
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
   afterAll(async () => {
     await db.$disconnect()
   })

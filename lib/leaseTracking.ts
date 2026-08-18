@@ -19,7 +19,10 @@ export async function getUpcomingLeaseExpirations(
 ): Promise<UpcomingLeaseExpiration[]> {
   const entries = await db.rentRollEntry.findMany({
     where: { propertyId, leaseEnd: { not: null } },
-    orderBy: { month: 'desc' },
+    // A mid-month tenant turnover can leave two rows for the same room in the same month
+    // (outgoing tenant's lease ending, incoming tenant's lease starting) — ordering by
+    // leaseStart descending after month means the incoming tenant's row is seen first.
+    orderBy: [{ month: 'desc' }, { leaseStart: 'desc' }],
   })
 
   const latestByRoom = new Map<string, (typeof entries)[number]>()
