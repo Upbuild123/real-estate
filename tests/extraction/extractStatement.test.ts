@@ -41,6 +41,58 @@ describe('ingestStatement', () => {
     expect(records.find((r) => r.accountItem === 'Rent')?.note).toBe('101-ZHU JIAOJIAO 2026-02分Rent')
   })
 
+  it('creates RentRollEntry rows from the extracted rent roll', async () => {
+    const property = await createProperty({ name: 'Ide Extract Rent Roll Test', address: 'x' })
+    const dropboxFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx-statement-rentroll',
+        filename: 'x.pdf',
+        uploadedAt: new Date(),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/x.pdf',
+      },
+    })
+
+    const result = await ingestStatement({
+      dropboxFileId: dropboxFile.id,
+      propertyId: property.id,
+      pdfBase64: 'ZmFrZQ==',
+    })
+
+    expect(result.status).toBe('success')
+    const entries = await db.rentRollEntry.findMany({ where: { propertyId: property.id } })
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({
+      month: '2026-01',
+      roomNumber: '101',
+      lessee: 'ZHU JIAOJIAO',
+      monthlyCharge: 125000,
+      leaseStart: '2024-03-28',
+      leaseEnd: '2026-03-27',
+    })
+  })
+
+  it('replaces RentRollEntry rows on re-ingestion rather than duplicating them', async () => {
+    const property = await createProperty({ name: 'Ide Extract Rent Roll Reingest Test', address: 'x' })
+    const dropboxFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx-statement-rentroll-2',
+        filename: 'x.pdf',
+        uploadedAt: new Date(),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/x.pdf',
+      },
+    })
+
+    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+
+    const entries = await db.rentRollEntry.findMany({ where: { propertyId: property.id } })
+    expect(entries).toHaveLength(1)
+  })
+
   it('preserves a manual correction when the same file is re-ingested', async () => {
     const property = await createProperty({ name: 'Ide Extract Test 2', address: 'x' })
     const dropboxFile = await db.dropboxFile.create({
@@ -211,6 +263,7 @@ describe('ingestStatement', () => {
 
   afterAll(async () => {
     await db.financialRecord.deleteMany({})
+    await db.rentRollEntry.deleteMany({})
     await db.extraction.deleteMany({})
     await db.dropboxFile.deleteMany({})
     await db.property.deleteMany({
@@ -223,6 +276,8 @@ describe('ingestStatement', () => {
             'Ide Extract Test Multi Unit',
             'Ide Extract Manual Multi Unit Test',
             'Ide Extract Double Fail Test',
+            'Ide Extract Rent Roll Test',
+            'Ide Extract Rent Roll Reingest Test',
           ],
         },
       },

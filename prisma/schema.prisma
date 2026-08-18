@@ -22,6 +22,7 @@ model Property {
   dropboxFiles   DropboxFile[]
   financialRecords FinancialRecord[]
   anomalyFlags   AnomalyFlag[]
+  rentRollEntries RentRollEntry[]
 }
 
 model Loan {
@@ -77,6 +78,7 @@ model Extraction {
   status         String      // "success" | "failed"
   extractedAt    DateTime    @default(now())
   financialRecords FinancialRecord[]
+  rentRollEntries RentRollEntry[]
 }
 
 model FinancialRecord {
@@ -94,6 +96,24 @@ model FinancialRecord {
   extractionId  String?
   extraction    Extraction? @relation(fields: [extractionId], references: [id])
   createdAt     DateTime    @default(now())
+}
+
+model RentRollEntry {
+  id            String      @id @default(cuid())
+  propertyId    String
+  property      Property    @relation(fields: [propertyId], references: [id])
+  month         String      // "2026-01" format — the statement's activity month this snapshot is from
+  roomNumber    String
+  unitType      String      // "Residence" | "Parking"
+  lessee        String      // "vacant" if unoccupied
+  monthlyCharge Int
+  leaseStart    String?     // "YYYY-MM-DD"
+  leaseEnd      String?     // "YYYY-MM-DD"
+  extractionId  String?
+  extraction    Extraction? @relation(fields: [extractionId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([propertyId, month, roomNumber])
 }
 
 model AnomalyFlag {

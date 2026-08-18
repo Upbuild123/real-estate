@@ -98,6 +98,25 @@ export async function ingestStatement(params: {
     await db.financialRecord.createMany({ data: recordsData })
   }
 
+  // Rent roll rows are keyed uniquely per (property, month, room), so re-ingesting the same
+  // statement just replaces the prior snapshot rather than accumulating duplicates.
+  await db.rentRollEntry.deleteMany({ where: { propertyId: params.propertyId, month: extracted.activityMonth } })
+  if (extracted.rentRoll.length > 0) {
+    await db.rentRollEntry.createMany({
+      data: extracted.rentRoll.map((entry) => ({
+        propertyId: params.propertyId,
+        month: extracted.activityMonth,
+        roomNumber: entry.roomNumber,
+        unitType: entry.unitType,
+        lessee: entry.lessee,
+        monthlyCharge: entry.monthlyCharge,
+        leaseStart: entry.leaseStart,
+        leaseEnd: entry.leaseEnd,
+        extractionId: extraction.id,
+      })),
+    })
+  }
+
   return {
     status: 'success',
     extractionId: extraction.id,

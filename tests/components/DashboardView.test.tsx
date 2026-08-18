@@ -51,6 +51,7 @@ const DEFAULT_PROPS = {
   roomBreakdown: [],
   expenseBreakdown: [],
   comparison: [],
+  upcomingLeaseExpirations: [],
 }
 
 describe('DashboardView — Operations view', () => {
@@ -68,6 +69,23 @@ describe('DashboardView — Operations view', () => {
     expect(screen.queryByText('Amortized Depreciation (non-cash)')).not.toBeInTheDocument()
     expect(screen.queryByText('Taxable Income')).not.toBeInTheDocument()
     expect(screen.queryByText('After-Tax Cash Flow')).not.toBeInTheDocument()
+  })
+
+  it('renders upcoming lease expirations when present', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        upcomingLeaseExpirations={[{ roomNumber: '101', lessee: 'Tenant A', leaseEnd: '2026-02-15', month: '2026-01' }]}
+      />
+    )
+    expect(screen.getByText('Upcoming Lease Expirations')).toBeInTheDocument()
+    expect(screen.getByText('Tenant A')).toBeInTheDocument()
+    expect(screen.getByText('2026-02-15')).toBeInTheDocument()
+  })
+
+  it('does not render the lease expirations section when there are none', () => {
+    render(<DashboardView {...DEFAULT_PROPS} upcomingLeaseExpirations={[]} />)
+    expect(screen.queryByText('Upcoming Lease Expirations')).not.toBeInTheDocument()
   })
 
   it('renders open anomaly flags', () => {

@@ -7,6 +7,7 @@ import type { MonthlyFinancials } from '../../lib/financialCalculations'
 import type { PeriodOption } from '../../lib/periods'
 import type { RoomBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
 import type { YearlyComparisonColumn } from '../../lib/dashboardData'
+import type { UpcomingLeaseExpiration } from '../../lib/leaseTracking'
 import type { AnomalyFlag } from '@prisma/client'
 import { formatYenCompact } from '../../lib/formatYen'
 import styles from './dashboard.module.css'
@@ -178,6 +179,35 @@ function ComparisonTable({ columns }: { columns: YearlyComparisonColumn[] }) {
   )
 }
 
+function LeaseExpirationsTable({ entries }: { entries: UpcomingLeaseExpiration[] }) {
+  if (entries.length === 0) return null
+
+  return (
+    <>
+      <h2 className={styles.sectionTitle}>Upcoming Lease Expirations</h2>
+      <p className={styles.sectionHint}>Leases ending within the next 90 days, based on the latest rent roll.</p>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Room</th>
+            <th>Tenant</th>
+            <th>Lease End</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={entry.roomNumber}>
+              <td>{entry.roomNumber}</td>
+              <td>{entry.lessee}</td>
+              <td>{entry.leaseEnd}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
 function FlagsSection({ flags, onResolved }: { flags: AnomalyFlag[]; onResolved: () => void }) {
   const [resolvingId, setResolvingId] = useState<string | null>(null)
 
@@ -229,6 +259,7 @@ export function DashboardView(props: {
   roomBreakdown: RoomBreakdownEntry[]
   expenseBreakdown: ExpenseBreakdownEntry[]
   comparison: YearlyComparisonColumn[]
+  upcomingLeaseExpirations: UpcomingLeaseExpiration[]
 }) {
   const router = useRouter()
 
@@ -295,6 +326,8 @@ export function DashboardView(props: {
           {isOperations && (
             <>
               <FlagsSection flags={props.dashboard.flags} onResolved={() => router.refresh()} />
+
+              <LeaseExpirationsTable entries={props.upcomingLeaseExpirations} />
 
               <RoomBreakdownTable entries={props.roomBreakdown} />
               <ExpenseBreakdownTable entries={props.expenseBreakdown} />
