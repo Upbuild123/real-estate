@@ -7,6 +7,7 @@ import {
   getPortfolioDashboard,
   getPropertyRangeDashboard,
   getEarliestMonthWithData,
+  getYearlyComparisonDashboard,
 } from '../lib/dashboardData'
 
 describe('dashboardData', () => {
@@ -42,6 +43,40 @@ describe('dashboardData', () => {
     expect(result.income).toBe(210000)
 
     await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('returns one column per year, full-year totals for prior years and YTD for the current year', async () => {
+    const property = await createProperty({ name: 'Dash Comparison Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2024-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'test-key-comp-1', source: 'extracted' },
+        { propertyId: property.id, month: '2024-12', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'test-key-comp-2', source: 'extracted' },
+        { propertyId: property.id, month: '2025-01', category: 'income', accountItem: 'Rent', amount: 200000, recurring: true, lineItemKey: 'test-key-comp-3', source: 'extracted' },
+        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 300000, recurring: true, lineItemKey: 'test-key-comp-4', source: 'extracted' },
+        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 999999, recurring: true, lineItemKey: 'test-key-comp-5', source: 'extracted' }, // excluded, after "now"
+      ],
+    })
+
+    const columns = await getYearlyComparisonDashboard(property.id, new Date('2026-02-15'))
+
+    expect(columns).toEqual([
+      { year: 2026, label: '2026 (YTD)', financials: expect.objectContaining({ income: 300000 }) },
+      { year: 2025, label: '2025', financials: expect.objectContaining({ income: 200000 }) },
+      { year: 2024, label: '2024', financials: expect.objectContaining({ income: 200000 }) },
+    ])
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('returns an empty array when the property has no data', async () => {
+    const property = await createProperty({ name: 'Dash Comparison No Data Test', address: 'x' })
+
+    const columns = await getYearlyComparisonDashboard(property.id)
+
+    expect(columns).toEqual([])
+
     await db.property.delete({ where: { id: property.id } })
   })
 
@@ -124,6 +159,8 @@ describe('dashboardData', () => {
             'Dash Range Test',
             'Dash Earliest Month Test',
             'Dash No Data Test',
+            'Dash Comparison Test',
+            'Dash Comparison No Data Test',
           ],
         },
       },

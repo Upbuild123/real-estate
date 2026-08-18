@@ -74,6 +74,43 @@ export async function getEarliestMonthWithData(propertyId: string): Promise<stri
   return record?.month ?? null
 }
 
+export interface YearlyComparisonColumn {
+  year: number
+  label: string
+  financials: MonthlyFinancials
+}
+
+// One column per year of available data, most recent first. The current calendar year is
+// YTD-only (through the latest month with data) since its full-year total isn't known yet;
+// every prior year is its complete Jan-Dec total. Comparing a YTD column against prior years'
+// full-year totals is a known apples-to-oranges gap the label makes explicit — the caller
+// should never present a YTD column as if it were a complete year.
+export async function getYearlyComparisonDashboard(
+  propertyId: string,
+  now: Date = new Date()
+): Promise<YearlyComparisonColumn[]> {
+  const earliestMonth = await getEarliestMonthWithData(propertyId)
+  if (!earliestMonth) return []
+
+  const earliestYear = Number(earliestMonth.split('-')[0])
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+
+  const columns: YearlyComparisonColumn[] = []
+  for (let year = currentYear; year >= earliestYear; year--) {
+    const isCurrentYear = year === currentYear
+    const throughMonth = isCurrentYear ? currentMonth : 12
+    const financials = await getPropertyYtdDashboard(propertyId, year, throughMonth)
+    columns.push({
+      year,
+      label: isCurrentYear ? `${year} (YTD)` : `${year}`,
+      financials,
+    })
+  }
+
+  return columns
+}
+
 export async function getPortfolioDashboard(
   month: string
 ): Promise<MonthlyFinancials & { perProperty: { propertyId: string; propertyName: string; financials: MonthlyFinancials }[] }> {

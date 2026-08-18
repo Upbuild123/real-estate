@@ -6,14 +6,16 @@ import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
 import type { PeriodOption } from '../../lib/periods'
 import type { RoomBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
+import type { YearlyComparisonColumn } from '../../lib/dashboardData'
 import type { AnomalyFlag } from '@prisma/client'
 import { formatYenCompact } from '../../lib/formatYen'
 import styles from './dashboard.module.css'
 
-export type DashboardViewMode = 'operations' | 'financials'
+export type DashboardViewMode = 'operations' | 'financials' | 'compare'
 
 // Operations: what you'd check monthly to catch anything the PM should explain — no
 // depreciation/tax/interest/loan noise. Financials: the full picture, for tax/loan review.
+// Compare reuses the Operations rows since it's also a trend/discrepancy view, not a tax view.
 const OPERATIONS_METRIC_ROWS: { label: string; key: keyof MonthlyFinancials; total?: boolean }[] = [
   { label: 'Income', key: 'income' },
   { label: 'Operating Expenses', key: 'operatingExpenses' },
@@ -144,6 +146,38 @@ function ExpenseBreakdownTable({ entries }: { entries: ExpenseBreakdownEntry[] }
   )
 }
 
+function ComparisonTable({ columns }: { columns: YearlyComparisonColumn[] }) {
+  if (columns.length === 0) return null
+
+  return (
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          {columns.map((column) => (
+            <th key={column.year}>{column.label}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {OPERATIONS_METRIC_ROWS.map((row) => (
+          <tr key={row.key} className={row.total ? styles.totalRow : undefined}>
+            <td>{row.label}</td>
+            {columns.map((column) => {
+              const { text, negative } = formatCell(column.financials[row.key])
+              return (
+                <td key={column.year} className={negative ? styles.negative : undefined}>
+                  {text}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export function DashboardView(props: {
   properties: { id: string; name: string }[]
   selectedPropertyId: string
@@ -153,6 +187,7 @@ export function DashboardView(props: {
   dashboard: MonthlyFinancials & { flags: AnomalyFlag[] }
   roomBreakdown: RoomBreakdownEntry[]
   expenseBreakdown: ExpenseBreakdownEntry[]
+  comparison: YearlyComparisonColumn[]
 }) {
   const router = useRouter()
 
@@ -161,6 +196,7 @@ export function DashboardView(props: {
   }
 
   const isOperations = props.view === 'operations'
+  const isCompare = props.view === 'compare'
 
   return (
     <div className={styles.page}>
@@ -185,39 +221,53 @@ export function DashboardView(props: {
         </Link>
         <Link
           href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=financials`}
-          className={!isOperations ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+          className={!isOperations && !isCompare ? `${styles.tab} ${styles.tabActive}` : styles.tab}
         >
           Financials
         </Link>
+        <Link
+          href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=compare`}
+          className={isCompare ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+        >
+          Compare
+        </Link>
       </nav>
 
-      <div className={styles.periodRow}>
-        <select className={styles.periodSelect} value={props.period} onChange={handlePeriodChange}>
-          {props.periodOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!isCompare && (
+        <div className={styles.periodRow}>
+          <select className={styles.periodSelect} value={props.period} onChange={handlePeriodChange}>
+            {props.periodOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      <MetricsTable rows={isOperations ? OPERATIONS_METRIC_ROWS : FINANCIALS_METRIC_ROWS} dashboard={props.dashboard} />
-
-      {isOperations && (
+      {isCompare ? (
+        <ComparisonTable columns={props.comparison} />
+      ) : (
         <>
-          {props.dashboard.flags.length > 0 && (
-            <div className={styles.flagsSection}>
-              <h2>Flags</h2>
-              <ul>
-                {props.dashboard.flags.map((flag) => (
-                  <li key={flag.id}>{flag.description}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <MetricsTable rows={isOperations ? OPERATIONS_METRIC_ROWS : FINANCIALS_METRIC_ROWS} dashboard={props.dashboard} />
 
-          <RoomBreakdownTable entries={props.roomBreakdown} />
-          <ExpenseBreakdownTable entries={props.expenseBreakdown} />
+          {isOperations && (
+            <>
+              {props.dashboard.flags.length > 0 && (
+                <div className={styles.flagsSection}>
+                  <h2>Flags</h2>
+                  <ul>
+                    {props.dashboard.flags.map((flag) => (
+                      <li key={flag.id}>{flag.description}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <RoomBreakdownTable entries={props.roomBreakdown} />
+              <ExpenseBreakdownTable entries={props.expenseBreakdown} />
+            </>
+          )}
         </>
       )}
     </div>

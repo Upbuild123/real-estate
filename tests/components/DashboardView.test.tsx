@@ -50,6 +50,7 @@ const DEFAULT_PROPS = {
   dashboard: SAMPLE_DASHBOARD,
   roomBreakdown: [],
   expenseBreakdown: [],
+  comparison: [],
 }
 
 describe('DashboardView — Operations view', () => {
@@ -165,12 +166,56 @@ describe('DashboardView — shared chrome', () => {
     expect(screen.getByText('January 2026')).toBeInTheDocument()
   })
 
-  it('renders Operations/Financials tabs, marking the active one', () => {
+  it('renders Operations/Financials/Compare tabs, marking the active one', () => {
     render(<DashboardView {...DEFAULT_PROPS} />)
 
-    const operationsTab = screen.getByText('Operations')
-    const financialsTab = screen.getByText('Financials')
-    expect(operationsTab).toBeInTheDocument()
-    expect(financialsTab).toBeInTheDocument()
+    expect(screen.getByText('Operations')).toBeInTheDocument()
+    expect(screen.getByText('Financials')).toBeInTheDocument()
+    expect(screen.getByText('Compare')).toBeInTheDocument()
+  })
+})
+
+describe('DashboardView — Compare view', () => {
+  const COMPARISON_PROPS = {
+    ...DEFAULT_PROPS,
+    view: 'compare' as const,
+    comparison: [
+      {
+        year: 2026,
+        label: '2026 (YTD)',
+        financials: { ...SAMPLE_DASHBOARD, income: 300000, operatingExpenses: 50000, noi: 250000 },
+      },
+      {
+        year: 2025,
+        label: '2025',
+        financials: { ...SAMPLE_DASHBOARD, income: 600000, operatingExpenses: 100000, noi: 500000 },
+      },
+    ],
+  }
+
+  it('renders one column per year with its label, and no period selector', () => {
+    render(<DashboardView {...COMPARISON_PROPS} />)
+
+    expect(screen.getByText('2026 (YTD)')).toBeInTheDocument()
+    expect(screen.getByText('2025')).toBeInTheDocument()
+    expect(screen.queryByText('January 2026')).not.toBeInTheDocument()
+  })
+
+  it('renders only Income, Operating Expenses, and NOI rows — no depreciation/tax/debt figures', () => {
+    render(<DashboardView {...COMPARISON_PROPS} />)
+
+    expect(screen.getByText('Income')).toBeInTheDocument()
+    expect(screen.getByText('Operating Expenses')).toBeInTheDocument()
+    expect(screen.getByText('NOI')).toBeInTheDocument()
+    expect(screen.queryByText('Amortized Depreciation (non-cash)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Debt Service')).not.toBeInTheDocument()
+  })
+
+  it('does not render flags or breakdown sections', () => {
+    render(<DashboardView {...COMPARISON_PROPS} />)
+
+    expect(screen.queryByText('Flags')).not.toBeInTheDocument()
+    expect(screen.queryByText('By Room')).not.toBeInTheDocument()
+    expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
   })
 })

@@ -1,5 +1,9 @@
 import { listProperties } from '../../lib/properties'
-import { getPropertyRangeDashboard, getEarliestMonthWithData } from '../../lib/dashboardData'
+import {
+  getPropertyRangeDashboard,
+  getEarliestMonthWithData,
+  getYearlyComparisonDashboard,
+} from '../../lib/dashboardData'
 import { getRoomBreakdown, getExpenseBreakdown } from '../../lib/lineItemBreakdown'
 import { parsePeriod, listPeriodOptions } from '../../lib/periods'
 import { DashboardView, type DashboardViewMode } from './DashboardView'
@@ -24,7 +28,12 @@ export default async function DashboardPage({
     return <p className={styles.empty}>No properties found. Add a property to get started.</p>
   }
 
-  const view: DashboardViewMode = resolvedSearchParams.view === 'financials' ? 'financials' : 'operations'
+  const view: DashboardViewMode =
+    resolvedSearchParams.view === 'financials'
+      ? 'financials'
+      : resolvedSearchParams.view === 'compare'
+        ? 'compare'
+        : 'operations'
 
   const earliestMonth = (await getEarliestMonthWithData(propertyId)) ?? new Date().toISOString().slice(0, 7)
   const periodOptions = listPeriodOptions({ earliestMonth })
@@ -41,11 +50,13 @@ export default async function DashboardPage({
   }
 
   // Room/expense breakdown are only shown on the Operations view — skip fetching them on
-  // Financials to avoid unnecessary work.
-  const [dashboard, roomBreakdown, expenseBreakdown] = await Promise.all([
+  // Financials/Compare to avoid unnecessary work. Comparison columns are only fetched on
+  // Compare — they span every year of data, not just the selected period.
+  const [dashboard, roomBreakdown, expenseBreakdown, comparison] = await Promise.all([
     getPropertyRangeDashboard(propertyId, months),
     view === 'operations' ? getRoomBreakdown(propertyId, months) : Promise.resolve([]),
     view === 'operations' ? getExpenseBreakdown(propertyId, months) : Promise.resolve([]),
+    view === 'compare' ? getYearlyComparisonDashboard(propertyId) : Promise.resolve([]),
   ])
 
   return (
@@ -58,6 +69,7 @@ export default async function DashboardPage({
       dashboard={dashboard}
       roomBreakdown={roomBreakdown}
       expenseBreakdown={expenseBreakdown}
+      comparison={comparison}
     />
   )
 }
