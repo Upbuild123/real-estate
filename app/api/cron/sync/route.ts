@@ -1,5 +1,6 @@
 import { syncDropboxFolder } from '../../../../lib/dropboxSync'
 import { listProperties } from '../../../../lib/properties'
+import { checkAndNotify } from '../../../../lib/notifications'
 
 // Syncs every property sequentially, each involving several Claude extraction calls — this
 // can comfortably exceed the default serverless timeout. Capped to whatever the actual
@@ -31,6 +32,17 @@ export async function GET(request: Request) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sync failed'
       results.push({ propertyId: property.id, status: 'failed', detail: message })
+    }
+  }
+
+  const notificationEmail = process.env.NOTIFICATION_EMAIL_TO
+  if (notificationEmail) {
+    try {
+      await checkAndNotify({ to: notificationEmail })
+    } catch (err) {
+      // Don't fail the whole cron run over a notification email issue — the sync results
+      // above are the part that actually matters for data correctness.
+      console.error('checkAndNotify failed:', err)
     }
   }
 

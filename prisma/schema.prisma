@@ -106,3 +106,9 @@ model AnomalyFlag {
   status      String   @default("open") // "open" | "resolved"
   createdAt   DateTime @default(now())
 }
+
+model MonthlyNotification {
+  id      String   @id @default(cuid())
+  month   String   @unique // the activity month this "statements are ready" email covered
+  sentAt  DateTime @default(now())
+}

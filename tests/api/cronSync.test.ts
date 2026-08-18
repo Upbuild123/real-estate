@@ -8,11 +8,17 @@ vi.mock('../../lib/properties', () => ({
   listProperties: vi.fn(),
 }))
 
+vi.mock('../../lib/notifications', () => ({
+  checkAndNotify: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { GET } from '../../app/api/cron/sync/route'
 import { syncDropboxFolder } from '../../lib/dropboxSync'
 import { listProperties } from '../../lib/properties'
+import { checkAndNotify } from '../../lib/notifications'
 
 const ORIGINAL_CRON_SECRET = process.env.CRON_SECRET
+const ORIGINAL_NOTIFICATION_EMAIL_TO = process.env.NOTIFICATION_EMAIL_TO
 
 function authedRequest() {
   return new Request('http://localhost/api/cron/sync', {
@@ -68,8 +74,42 @@ describe('GET /api/cron/sync', () => {
     expect(body.results[0].status).toBe('failed')
     expect(body.results[1].status).toBe('success')
   })
+
+  it('calls checkAndNotify when NOTIFICATION_EMAIL_TO is configured', async () => {
+    process.env.CRON_SECRET = 'test-secret'
+    process.env.NOTIFICATION_EMAIL_TO = 'michael.sloyer@gmail.com'
+    ;(listProperties as any).mockResolvedValueOnce([])
+    ;(checkAndNotify as any).mockClear()
+
+    await GET(authedRequest())
+
+    expect(checkAndNotify).toHaveBeenCalledWith({ to: 'michael.sloyer@gmail.com' })
+  })
+
+  it('does not call checkAndNotify when NOTIFICATION_EMAIL_TO is not configured', async () => {
+    process.env.CRON_SECRET = 'test-secret'
+    delete process.env.NOTIFICATION_EMAIL_TO
+    ;(listProperties as any).mockResolvedValueOnce([])
+    ;(checkAndNotify as any).mockClear()
+
+    await GET(authedRequest())
+
+    expect(checkAndNotify).not.toHaveBeenCalled()
+  })
+
+  it('still returns a successful response even if checkAndNotify throws', async () => {
+    process.env.CRON_SECRET = 'test-secret'
+    process.env.NOTIFICATION_EMAIL_TO = 'michael.sloyer@gmail.com'
+    ;(listProperties as any).mockResolvedValueOnce([])
+    ;(checkAndNotify as any).mockRejectedValueOnce(new Error('Resend is down'))
+
+    const response = await GET(authedRequest())
+
+    expect(response.status).toBe(200)
+  })
 })
 
 afterAll(() => {
   process.env.CRON_SECRET = ORIGINAL_CRON_SECRET
+  process.env.NOTIFICATION_EMAIL_TO = ORIGINAL_NOTIFICATION_EMAIL_TO
 })
