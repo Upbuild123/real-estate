@@ -22,4 +22,9 @@ describe('extractRoomToken', () => {
     expect(extractRoomToken('common area power bill')).toBeNull()
     expect(extractRoomToken('water leakage repair in common area')).toBeNull()
   })
+
+  it('does not mistake a leading billing-period year (e.g. "2026-02 ...") for a room number', () => {
+    expect(extractRoomToken('2026-02 井手ビル 管理委託料支払い')).toBeNull()
+    expect(extractRoomToken('2026-05 レジデンスDO5 Regular Cleaning')).toBeNull()
+  })
 })
