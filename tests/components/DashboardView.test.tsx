@@ -46,39 +46,36 @@ const DEFAULT_PROPS = {
     { value: '2026-ytd', label: '2026 YTD' },
     { value: '2026-01', label: 'January 2026' },
   ],
+  view: 'operations' as const,
   dashboard: SAMPLE_DASHBOARD,
   roomBreakdown: [],
   expenseBreakdown: [],
 }
 
-describe('DashboardView', () => {
-  it('renders rounded/compact NOI and cash flow figures, and open anomaly flags', () => {
+describe('DashboardView — Operations view', () => {
+  it('renders only Income, Operating Expenses, and NOI — no debt/tax/depreciation figures', () => {
     render(<DashboardView {...DEFAULT_PROPS} />)
 
-    // 808201 rounds to the nearest thousand and displays compact, not the raw number
+    expect(screen.getByText('Income')).toBeInTheDocument()
+    expect(screen.getByText('Operating Expenses')).toBeInTheDocument()
+    expect(screen.getByText('NOI')).toBeInTheDocument()
     expect(screen.getByText('808K')).toBeInTheDocument()
-    // negative after-tax cash flow (-35567.58) shows compact and parenthesized
-    expect(screen.getByText('(36K)')).toBeInTheDocument()
-    expect(screen.getByText('Net cash flow is negative')).toBeInTheDocument()
+
+    expect(screen.queryByText('Interest Expense')).not.toBeInTheDocument()
+    expect(screen.queryByText('Debt Service')).not.toBeInTheDocument()
+    expect(screen.queryByText('Amortized Tax')).not.toBeInTheDocument()
+    expect(screen.queryByText('Amortized Depreciation (non-cash)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Taxable Income')).not.toBeInTheDocument()
+    expect(screen.queryByText('After-Tax Cash Flow')).not.toBeInTheDocument()
   })
 
-  it('renders a tab per property, marking the selected one', () => {
-    render(<DashboardView {...DEFAULT_PROPS} selectedPropertyId="p2" />)
-
-    expect(screen.getByText('Ide building')).toBeInTheDocument()
-    expect(screen.getByText('Residence DO5')).toBeInTheDocument()
-  })
-
-  it('renders every period option in the selector', () => {
+  it('renders open anomaly flags', () => {
     render(<DashboardView {...DEFAULT_PROPS} />)
-
-    expect(screen.getByText('2026 YTD')).toBeInTheDocument()
-    expect(screen.getByText('January 2026')).toBeInTheDocument()
+    expect(screen.getByText('Net cash flow is negative')).toBeInTheDocument()
   })
 
   it('does not render a Flags section when there are no open flags', () => {
     render(<DashboardView {...DEFAULT_PROPS} dashboard={{ ...SAMPLE_DASHBOARD, flags: [] }} />)
-
     expect(screen.queryByText('Flags')).not.toBeInTheDocument()
   })
 
@@ -119,5 +116,61 @@ describe('DashboardView', () => {
   it('does not render the Expenses by Category section when there is no expense breakdown data', () => {
     render(<DashboardView {...DEFAULT_PROPS} expenseBreakdown={[]} />)
     expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
+  })
+})
+
+describe('DashboardView — Financials view', () => {
+  const financialsProps = { ...DEFAULT_PROPS, view: 'financials' as const }
+
+  it('renders every financial metric including debt service, tax, depreciation, and after-tax cash flow', () => {
+    render(<DashboardView {...financialsProps} />)
+
+    expect(screen.getByText('Interest Expense')).toBeInTheDocument()
+    expect(screen.getByText('Debt Service')).toBeInTheDocument()
+    expect(screen.getByText('Amortized Tax')).toBeInTheDocument()
+    expect(screen.getByText('Amortized Depreciation (non-cash)')).toBeInTheDocument()
+    expect(screen.getByText('Taxable Income')).toBeInTheDocument()
+    expect(screen.getByText('After-Tax Cash Flow')).toBeInTheDocument()
+    // negative after-tax cash flow (-35567.58) shows compact and parenthesized
+    expect(screen.getByText('(36K)')).toBeInTheDocument()
+  })
+
+  it('does not render Flags, By Room, or Expenses by Category sections', () => {
+    render(
+      <DashboardView
+        {...financialsProps}
+        roomBreakdown={[{ room: '101', accountItem: 'Rent', category: 'income', amount: 125000 }]}
+        expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true }]}
+      />
+    )
+
+    expect(screen.queryByText('Flags')).not.toBeInTheDocument()
+    expect(screen.queryByText('By Room')).not.toBeInTheDocument()
+    expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
+  })
+})
+
+describe('DashboardView — shared chrome', () => {
+  it('renders a tab per property, marking the selected one', () => {
+    render(<DashboardView {...DEFAULT_PROPS} selectedPropertyId="p2" />)
+
+    expect(screen.getByText('Ide building')).toBeInTheDocument()
+    expect(screen.getByText('Residence DO5')).toBeInTheDocument()
+  })
+
+  it('renders every period option in the selector', () => {
+    render(<DashboardView {...DEFAULT_PROPS} />)
+
+    expect(screen.getByText('2026 YTD')).toBeInTheDocument()
+    expect(screen.getByText('January 2026')).toBeInTheDocument()
+  })
+
+  it('renders Operations/Financials tabs, marking the active one', () => {
+    render(<DashboardView {...DEFAULT_PROPS} />)
+
+    const operationsTab = screen.getByText('Operations')
+    const financialsTab = screen.getByText('Financials')
+    expect(operationsTab).toBeInTheDocument()
+    expect(financialsTab).toBeInTheDocument()
   })
 })

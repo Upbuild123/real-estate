@@ -10,7 +10,17 @@ import type { AnomalyFlag } from '@prisma/client'
 import { formatYenCompact } from '../../lib/formatYen'
 import styles from './dashboard.module.css'
 
-const METRIC_ROWS: { label: string; key: keyof MonthlyFinancials; total?: boolean }[] = [
+export type DashboardViewMode = 'operations' | 'financials'
+
+// Operations: what you'd check monthly to catch anything the PM should explain — no
+// depreciation/tax/interest/loan noise. Financials: the full picture, for tax/loan review.
+const OPERATIONS_METRIC_ROWS: { label: string; key: keyof MonthlyFinancials; total?: boolean }[] = [
+  { label: 'Income', key: 'income' },
+  { label: 'Operating Expenses', key: 'operatingExpenses' },
+  { label: 'NOI', key: 'noi', total: true },
+]
+
+const FINANCIALS_METRIC_ROWS: { label: string; key: keyof MonthlyFinancials; total?: boolean }[] = [
   { label: 'Income', key: 'income' },
   { label: 'Operating Expenses', key: 'operatingExpenses' },
   { label: 'NOI', key: 'noi', total: true },
@@ -31,6 +41,30 @@ function formatCell(value: number): { text: string; negative: boolean } {
     return { text: `(${formatYenCompact(Math.abs(value))})`, negative: true }
   }
   return { text: formatYenCompact(value), negative: false }
+}
+
+function MetricsTable({ rows, dashboard }: { rows: typeof FINANCIALS_METRIC_ROWS; dashboard: MonthlyFinancials }) {
+  return (
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Yen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => {
+          const { text, negative } = formatCell(dashboard[row.key])
+          return (
+            <tr key={row.key} className={row.total ? styles.totalRow : undefined}>
+              <td>{row.label}</td>
+              <td className={negative ? styles.negative : undefined}>{text}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
 }
 
 function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
@@ -115,6 +149,7 @@ export function DashboardView(props: {
   selectedPropertyId: string
   period: string
   periodOptions: PeriodOption[]
+  view: DashboardViewMode
   dashboard: MonthlyFinancials & { flags: AnomalyFlag[] }
   roomBreakdown: RoomBreakdownEntry[]
   expenseBreakdown: ExpenseBreakdownEntry[]
@@ -122,8 +157,10 @@ export function DashboardView(props: {
   const router = useRouter()
 
   function handlePeriodChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    router.push(`/dashboard?propertyId=${props.selectedPropertyId}&period=${e.target.value}`)
+    router.push(`/dashboard?propertyId=${props.selectedPropertyId}&period=${e.target.value}&view=${props.view}`)
   }
+
+  const isOperations = props.view === 'operations'
 
   return (
     <div className={styles.page}>
@@ -131,12 +168,27 @@ export function DashboardView(props: {
         {props.properties.map((property) => (
           <Link
             key={property.id}
-            href={`/dashboard?propertyId=${property.id}&period=${props.period}`}
+            href={`/dashboard?propertyId=${property.id}&period=${props.period}&view=${props.view}`}
             className={property.id === props.selectedPropertyId ? `${styles.tab} ${styles.tabActive}` : styles.tab}
           >
             {property.name}
           </Link>
         ))}
+      </nav>
+
+      <nav className={styles.tabs}>
+        <Link
+          href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=operations`}
+          className={isOperations ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+        >
+          Operations
+        </Link>
+        <Link
+          href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=financials`}
+          className={!isOperations ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+        >
+          Financials
+        </Link>
       </nav>
 
       <div className={styles.periodRow}>
@@ -149,39 +201,25 @@ export function DashboardView(props: {
         </select>
       </div>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Yen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {METRIC_ROWS.map((row) => {
-            const { text, negative } = formatCell(props.dashboard[row.key])
-            return (
-              <tr key={row.key} className={row.total ? styles.totalRow : undefined}>
-                <td>{row.label}</td>
-                <td className={negative ? styles.negative : undefined}>{text}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <MetricsTable rows={isOperations ? OPERATIONS_METRIC_ROWS : FINANCIALS_METRIC_ROWS} dashboard={props.dashboard} />
 
-      {props.dashboard.flags.length > 0 && (
-        <div className={styles.flagsSection}>
-          <h2>Flags</h2>
-          <ul>
-            {props.dashboard.flags.map((flag) => (
-              <li key={flag.id}>{flag.description}</li>
-            ))}
-          </ul>
-        </div>
+      {isOperations && (
+        <>
+          {props.dashboard.flags.length > 0 && (
+            <div className={styles.flagsSection}>
+              <h2>Flags</h2>
+              <ul>
+                {props.dashboard.flags.map((flag) => (
+                  <li key={flag.id}>{flag.description}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <RoomBreakdownTable entries={props.roomBreakdown} />
+          <ExpenseBreakdownTable entries={props.expenseBreakdown} />
+        </>
       )}
-
-      <RoomBreakdownTable entries={props.roomBreakdown} />
-      <ExpenseBreakdownTable entries={props.expenseBreakdown} />
     </div>
   )
 }
