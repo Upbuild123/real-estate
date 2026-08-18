@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { db } from '../lib/db'
 import { createProperty } from '../lib/properties'
-import { getUpcomingLeaseExpirations } from '../lib/leaseTracking'
+import { getUpcomingLeaseExpirations, getPortfolioUpcomingLeaseExpirations } from '../lib/leaseTracking'
 
 describe('getUpcomingLeaseExpirations', () => {
   it('returns rooms whose most recent lease ends within the next 90 days', async () => {
@@ -68,6 +68,30 @@ describe('getUpcomingLeaseExpirations', () => {
 
     await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
     await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('combines upcoming expirations across every active property, tagged with property name, sorted by lease end', async () => {
+    const propertyA = await createProperty({ name: 'Lease Portfolio Test A', address: 'x' })
+    const propertyB = await createProperty({ name: 'Lease Portfolio Test B', address: 'x' })
+    const now = new Date('2026-01-01')
+
+    await db.rentRollEntry.createMany({
+      data: [
+        { propertyId: propertyA.id, month: '2025-12', roomNumber: '101', unitType: 'Residence', lessee: 'Tenant A', monthlyCharge: 100000, leaseStart: '2024-01-01', leaseEnd: '2026-02-15' },
+        { propertyId: propertyB.id, month: '2025-12', roomNumber: '201', unitType: 'Residence', lessee: 'Tenant B', monthlyCharge: 100000, leaseStart: '2024-01-01', leaseEnd: '2026-01-20' },
+      ],
+    })
+
+    const result = await getPortfolioUpcomingLeaseExpirations(now)
+    const relevant = result.filter((r) => r.propertyId === propertyA.id || r.propertyId === propertyB.id)
+
+    expect(relevant).toEqual([
+      { propertyId: propertyB.id, propertyName: 'Lease Portfolio Test B', roomNumber: '201', lessee: 'Tenant B', leaseEnd: '2026-01-20', month: '2025-12' },
+      { propertyId: propertyA.id, propertyName: 'Lease Portfolio Test A', roomNumber: '101', lessee: 'Tenant A', leaseEnd: '2026-02-15', month: '2025-12' },
+    ])
+
+    await db.rentRollEntry.deleteMany({ where: { propertyId: { in: [propertyA.id, propertyB.id] } } })
+    await db.property.deleteMany({ where: { id: { in: [propertyA.id, propertyB.id] } } })
   })
 
   afterAll(async () => {

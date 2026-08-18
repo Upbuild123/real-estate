@@ -4,6 +4,15 @@
   padding: 24px 16px 48px;
 }
 
+.portfolioLeaseBanner {
+  font-size: 13px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--flag-text);
+  color: var(--flag-text);
+}
+
 .tabs {
   display: flex;
   gap: 4px;

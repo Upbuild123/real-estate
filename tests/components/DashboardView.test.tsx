@@ -52,6 +52,7 @@ const DEFAULT_PROPS = {
   expenseBreakdown: [],
   comparison: [],
   upcomingLeaseExpirations: [],
+  portfolioLeaseExpirations: [],
 }
 
 describe('DashboardView — Operations view', () => {
@@ -184,6 +185,27 @@ describe('DashboardView — Financials view', () => {
     expect(screen.queryByText('Flags')).not.toBeInTheDocument()
     expect(screen.queryByText('By Room')).not.toBeInTheDocument()
     expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
+  })
+})
+
+describe('DashboardView — portfolio lease banner', () => {
+  it('renders a banner across all views when portfolio-wide expirations exist', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        view="financials"
+        portfolioLeaseExpirations={[
+          { propertyId: 'p2', propertyName: 'Residence DO5', roomNumber: '201', lessee: 'Tenant X', leaseEnd: '2026-03-01', month: '2026-01' },
+        ]}
+      />
+    )
+    expect(screen.getByText(/Upcoming lease expirations/)).toBeInTheDocument()
+    expect(screen.getByText(/Residence DO5 #201/)).toBeInTheDocument()
+  })
+
+  it('renders no banner when there are no portfolio-wide expirations', () => {
+    render(<DashboardView {...DEFAULT_PROPS} portfolioLeaseExpirations={[]} />)
+    expect(screen.queryByText(/Upcoming lease expirations/)).not.toBeInTheDocument()
   })
 })
 

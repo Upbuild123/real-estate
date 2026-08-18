@@ -1,10 +1,16 @@
 import { db } from './db'
+import { listProperties } from './properties'
 
 export interface UpcomingLeaseExpiration {
   roomNumber: string
   lessee: string
   leaseEnd: string
   month: string
+}
+
+export interface PortfolioUpcomingLeaseExpiration extends UpcomingLeaseExpiration {
+  propertyId: string
+  propertyName: string
 }
 
 const WINDOW_DAYS = 90
@@ -49,4 +55,22 @@ export async function getUpcomingLeaseExpirations(
     }))
 
   return upcoming.sort((a, b) => a.leaseEnd.localeCompare(b.leaseEnd))
+}
+
+// Same window/staleness logic as getUpcomingLeaseExpirations, across every active property —
+// shown regardless of which property tab is selected, since an expiring lease is worth
+// surfacing even while you're looking at a different building's numbers.
+export async function getPortfolioUpcomingLeaseExpirations(
+  now: Date = new Date()
+): Promise<PortfolioUpcomingLeaseExpiration[]> {
+  const properties = await listProperties()
+
+  const perProperty = await Promise.all(
+    properties.map(async (property) => {
+      const entries = await getUpcomingLeaseExpirations(property.id, now)
+      return entries.map((entry) => ({ ...entry, propertyId: property.id, propertyName: property.name }))
+    })
+  )
+
+  return perProperty.flat().sort((a, b) => a.leaseEnd.localeCompare(b.leaseEnd))
 }

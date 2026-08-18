@@ -7,7 +7,7 @@ import type { MonthlyFinancials } from '../../lib/financialCalculations'
 import type { PeriodOption } from '../../lib/periods'
 import type { RoomBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
 import type { YearlyComparisonColumn } from '../../lib/dashboardData'
-import type { UpcomingLeaseExpiration } from '../../lib/leaseTracking'
+import type { UpcomingLeaseExpiration, PortfolioUpcomingLeaseExpiration } from '../../lib/leaseTracking'
 import type { AnomalyFlag } from '@prisma/client'
 import { formatYenCompact } from '../../lib/formatYen'
 import styles from './dashboard.module.css'
@@ -179,6 +179,22 @@ function ComparisonTable({ columns }: { columns: YearlyComparisonColumn[] }) {
   )
 }
 
+function PortfolioLeaseBanner({ entries }: { entries: PortfolioUpcomingLeaseExpiration[] }) {
+  if (entries.length === 0) return null
+
+  return (
+    <div className={styles.portfolioLeaseBanner}>
+      <strong>Upcoming lease expirations (next 90 days):</strong>{' '}
+      {entries.map((entry, i) => (
+        <span key={`${entry.propertyId}-${entry.roomNumber}`}>
+          {entry.propertyName} #{entry.roomNumber} ({entry.lessee}) — {entry.leaseEnd}
+          {i < entries.length - 1 ? '; ' : ''}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function LeaseExpirationsTable({ entries }: { entries: UpcomingLeaseExpiration[] }) {
   if (entries.length === 0) return null
 
@@ -260,6 +276,7 @@ export function DashboardView(props: {
   expenseBreakdown: ExpenseBreakdownEntry[]
   comparison: YearlyComparisonColumn[]
   upcomingLeaseExpirations: UpcomingLeaseExpiration[]
+  portfolioLeaseExpirations: PortfolioUpcomingLeaseExpiration[]
 }) {
   const router = useRouter()
 
@@ -272,6 +289,8 @@ export function DashboardView(props: {
 
   return (
     <div className={styles.page}>
+      <PortfolioLeaseBanner entries={props.portfolioLeaseExpirations} />
+
       <nav className={styles.tabs}>
         {props.properties.map((property) => (
           <Link
