@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
@@ -178,6 +178,47 @@ function ComparisonTable({ columns }: { columns: YearlyComparisonColumn[] }) {
   )
 }
 
+function FlagsSection({ flags, onResolved }: { flags: AnomalyFlag[]; onResolved: () => void }) {
+  const [resolvingId, setResolvingId] = useState<string | null>(null)
+
+  if (flags.length === 0) return null
+
+  async function resolve(id: string) {
+    setResolvingId(id)
+    try {
+      await fetch(`/api/anomaly-flags/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'resolved' }),
+      })
+      onResolved()
+    } finally {
+      setResolvingId(null)
+    }
+  }
+
+  return (
+    <div className={styles.flagsSection}>
+      <h2>Flags</h2>
+      <ul>
+        {flags.map((flag) => (
+          <li key={flag.id}>
+            {flag.description}
+            <button
+              type="button"
+              className={styles.resolveButton}
+              disabled={resolvingId === flag.id}
+              onClick={() => resolve(flag.id)}
+            >
+              {resolvingId === flag.id ? 'Resolving…' : 'Resolve'}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function DashboardView(props: {
   properties: { id: string; name: string }[]
   selectedPropertyId: string
@@ -253,16 +294,7 @@ export function DashboardView(props: {
 
           {isOperations && (
             <>
-              {props.dashboard.flags.length > 0 && (
-                <div className={styles.flagsSection}>
-                  <h2>Flags</h2>
-                  <ul>
-                    {props.dashboard.flags.map((flag) => (
-                      <li key={flag.id}>{flag.description}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <FlagsSection flags={props.dashboard.flags} onResolved={() => router.refresh()} />
 
               <RoomBreakdownTable entries={props.roomBreakdown} />
               <ExpenseBreakdownTable entries={props.expenseBreakdown} />

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }))
 
 import { DashboardView } from '../../app/dashboard/DashboardView'
@@ -78,6 +78,24 @@ describe('DashboardView — Operations view', () => {
   it('does not render a Flags section when there are no open flags', () => {
     render(<DashboardView {...DEFAULT_PROPS} dashboard={{ ...SAMPLE_DASHBOARD, flags: [] }} />)
     expect(screen.queryByText('Flags')).not.toBeInTheDocument()
+  })
+
+  it('renders a Resolve button for each open flag and PATCHes the flag when clicked', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<DashboardView {...DEFAULT_PROPS} />)
+    const resolveButton = screen.getByRole('button', { name: 'Resolve' })
+    resolveButton.click()
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/anomaly-flags/f1',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ status: 'resolved' }) })
+      )
+    })
+
+    vi.unstubAllGlobals()
   })
 
   it('groups room breakdown entries under a room header', () => {

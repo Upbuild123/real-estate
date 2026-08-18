@@ -98,6 +98,26 @@
 
 .flagsSection li {
   color: var(--flag-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resolveButton {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--flag-text);
+  background: transparent;
+  color: var(--flag-text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.resolveButton:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .empty {
