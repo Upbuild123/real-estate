@@ -155,7 +155,7 @@ function AddLoanForm({ properties }: { properties: PropertyOption[] }) {
 function AddAnnualCostForm({ properties }: { properties: PropertyOption[] }) {
   const { message, isError, submit } = useSubmitState()
   const [propertyId, setPropertyId] = useState(properties[0]?.id ?? '')
-  const [costType, setCostType] = useState<'tax' | 'insurance'>('tax')
+  const [costType, setCostType] = useState<'tax' | 'insurance' | 'depreciation'>('tax')
   const [year, setYear] = useState(String(new Date().getFullYear()))
   const [annualAmount, setAnnualAmount] = useState('')
 
@@ -172,7 +172,7 @@ function AddAnnualCostForm({ properties }: { properties: PropertyOption[] }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2>Add Annual Tax / Insurance</h2>
+      <h2>Add Annual Tax / Insurance / Depreciation</h2>
       <label>
         Property
         <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required>
@@ -185,9 +185,10 @@ function AddAnnualCostForm({ properties }: { properties: PropertyOption[] }) {
       </label>
       <label>
         Type
-        <select value={costType} onChange={(e) => setCostType(e.target.value as 'tax' | 'insurance')}>
+        <select value={costType} onChange={(e) => setCostType(e.target.value as 'tax' | 'insurance' | 'depreciation')}>
           <option value="tax">Property Tax</option>
           <option value="insurance">Insurance</option>
+          <option value="depreciation">Depreciation</option>
         </select>
       </label>
       <label>

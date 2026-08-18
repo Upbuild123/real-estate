@@ -17,6 +17,7 @@ const SAMPLE_DASHBOARD = {
   principalPaydown: 461000,
   amortizedTax: 18991.67,
   amortizedInsurance: 3836.67,
+  amortizedDepreciation: 139166.67,
   preTaxCashFlow: 285372.66,
   taxableIncome: 746372.66,
   incomeTaxOwed: 320940.24,

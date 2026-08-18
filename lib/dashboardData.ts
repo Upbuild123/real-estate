@@ -12,6 +12,7 @@ const ZERO_FINANCIALS: MonthlyFinancials = {
   principalPaydown: 0,
   amortizedTax: 0,
   amortizedInsurance: 0,
+  amortizedDepreciation: 0,
   preTaxCashFlow: 0,
   taxableIncome: 0,
   incomeTaxOwed: 0,

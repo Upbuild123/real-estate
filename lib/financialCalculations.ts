@@ -12,6 +12,7 @@ export interface MonthlyFinancials {
   principalPaydown: number
   amortizedTax: number
   amortizedInsurance: number
+  amortizedDepreciation: number
   preTaxCashFlow: number
   taxableIncome: number
   incomeTaxOwed: number
@@ -33,8 +34,11 @@ export async function getMonthlyFinancials(propertyId: string, month: string): P
   const year = parseInt(month.split('-')[0], 10)
   const amortizedTax = await getMonthlyAmortizedCost(propertyId, 'tax', year)
   const amortizedInsurance = await getMonthlyAmortizedCost(propertyId, 'insurance', year)
+  const amortizedDepreciation = await getMonthlyAmortizedCost(propertyId, 'depreciation', year)
 
-  const rawTaxableIncome = noi - interestExpense - amortizedTax - amortizedInsurance
+  // Depreciation reduces taxable income (it's a real deductible expense for tax purposes)
+  // but is never a cash outflow, so it must never appear in preTaxCashFlow/afterTaxCashFlow below.
+  const rawTaxableIncome = noi - interestExpense - amortizedTax - amortizedInsurance - amortizedDepreciation
   const taxableIncome = Math.max(rawTaxableIncome, 0)
 
   const marginalRate = await getMarginalTaxRate()
@@ -52,6 +56,7 @@ export async function getMonthlyFinancials(propertyId: string, month: string): P
     principalPaydown,
     amortizedTax,
     amortizedInsurance,
+    amortizedDepreciation,
     preTaxCashFlow,
     taxableIncome,
     incomeTaxOwed,

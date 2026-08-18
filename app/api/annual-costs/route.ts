@@ -13,8 +13,8 @@ export async function POST(request: Request) {
   if (typeof propertyId !== 'string' || propertyId.trim() === '') {
     return Response.json({ error: 'propertyId is required and must be a non-empty string' }, { status: 400 })
   }
-  if (costType !== 'tax' && costType !== 'insurance') {
-    return Response.json({ error: 'costType must be "tax" or "insurance"' }, { status: 400 })
+  if (costType !== 'tax' && costType !== 'insurance' && costType !== 'depreciation') {
+    return Response.json({ error: 'costType must be "tax", "insurance", or "depreciation"' }, { status: 400 })
   }
   if (typeof year !== 'number' || !Number.isFinite(year)) {
     return Response.json({ error: 'year is required and must be a number' }, { status: 400 })

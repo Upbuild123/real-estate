@@ -100,6 +100,30 @@ describe('getMonthlyFinancials', () => {
     expect(result.preTaxCashFlow).toBeCloseTo(expectedPreTaxCashFlow, 1)
   })
 
+  it('depreciation reduces taxable income (and thus tax owed) but never touches cash flow, since it is not a cash expense', async () => {
+    const property = await createProperty({ name: 'Depreciation Calc Test', address: 'x' })
+
+    await db.financialRecord.create({
+      data: { propertyId: property.id, month: '2026-05', category: 'income', accountItem: 'Rent', amount: 1000000, recurring: true, lineItemKey: 'test-key-dep', source: 'extracted' },
+    })
+    await upsertAnnualCost({ propertyId: property.id, costType: 'depreciation', year: 2026, annualAmount: 1670000 })
+    await setSetting('marginalTaxRate', '0.43')
+
+    const withDepreciation = await getMonthlyFinancials(property.id, '2026-05')
+
+    const expectedAmortizedDepreciation = 1670000 / 12
+    expect(withDepreciation.amortizedDepreciation).toBeCloseTo(expectedAmortizedDepreciation, 2)
+
+    const expectedTaxableIncome = 1000000 - expectedAmortizedDepreciation
+    expect(withDepreciation.taxableIncome).toBeCloseTo(expectedTaxableIncome, 1)
+    expect(withDepreciation.incomeTaxOwed).toBeCloseTo(expectedTaxableIncome * 0.43, 1)
+
+    // Cash flow must equal NOI exactly here (no loan, no tax/insurance) — depreciation must
+    // not appear in either cash flow figure despite reducing the tax bill.
+    expect(withDepreciation.preTaxCashFlow).toBe(1000000)
+    expect(withDepreciation.afterTaxCashFlow).toBeCloseTo(1000000 - expectedTaxableIncome * 0.43, 1)
+  })
+
   it('handles a month with no financial records without throwing', async () => {
     const property = await createProperty({ name: 'Empty Month Test', address: 'x' })
 
@@ -115,7 +139,9 @@ describe('getMonthlyFinancials', () => {
     await db.loan.deleteMany({})
     await db.annualCost.deleteMany({})
     await db.setting.deleteMany({ where: { key: 'marginalTaxRate' } })
-    await db.property.deleteMany({ where: { name: { in: ['Ide Calc Test', 'Loss Test', 'No Loan Test', 'Empty Month Test'] } } })
+    await db.property.deleteMany({
+      where: { name: { in: ['Ide Calc Test', 'Loss Test', 'No Loan Test', 'Empty Month Test', 'Depreciation Calc Test'] } },
+    })
     await db.$disconnect()
   })
 })

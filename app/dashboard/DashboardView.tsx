@@ -20,6 +20,7 @@ const METRIC_ROWS: { label: string; key: keyof MonthlyFinancials; total?: boolea
   { label: 'Amortized Tax', key: 'amortizedTax' },
   { label: 'Amortized Insurance', key: 'amortizedInsurance' },
   { label: 'Pre-Tax Cash Flow', key: 'preTaxCashFlow', total: true },
+  { label: 'Amortized Depreciation (non-cash)', key: 'amortizedDepreciation' },
   { label: 'Taxable Income', key: 'taxableIncome' },
   { label: 'Income Tax Owed', key: 'incomeTaxOwed' },
   { label: 'After-Tax Cash Flow', key: 'afterTaxCashFlow', total: true },

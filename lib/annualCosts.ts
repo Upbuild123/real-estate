@@ -2,7 +2,7 @@ import { db } from './db'
 import { amortizeAnnual } from './amortization'
 import type { AnnualCost } from '@prisma/client'
 
-type CostType = 'tax' | 'insurance'
+type CostType = 'tax' | 'insurance' | 'depreciation'
 
 export async function upsertAnnualCost(input: {
   propertyId: string
