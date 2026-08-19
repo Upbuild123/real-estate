@@ -48,26 +48,51 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
   }
 
   // Rent-roll snapshot per room, most recent month within the selected period — used both to
-  // fill in a "Rent" row for rooms with zero income line items this period (a fully vacant or
-  // fully-missed-payment room might not generate any FinancialRecord at all) and to compute
-  // each room's collection status.
+  // fill in an income row for rooms with zero matching line items this period (a fully vacant
+  // or fully-missed-payment room might not generate any FinancialRecord at all) and to compute
+  // each room's collection status. A Parking unit's charge is billed under the "Parking"
+  // accountItem, not "Rent" — using the wrong one here would both mismatch the real line item
+  // (double-counting the room, once correctly and once as a phantom zero row) and always read
+  // as a false "arrears".
   const rentRollInPeriod = allRentRoll.filter((r) => months.includes(r.month))
   const latestByRoom = new Map<string, (typeof rentRollInPeriod)[number]>()
   for (const entry of [...rentRollInPeriod].sort((a, b) => b.month.localeCompare(a.month))) {
     if (!latestByRoom.has(entry.roomNumber)) latestByRoom.set(entry.roomNumber, entry)
   }
 
+  // Which accountItem a room's charge is billed under isn't consistent across properties —
+  // e.g. Ide's roof antenna is typed "Parking" but billed as "Rent", while D05's actual
+  // parking spots are billed as "Parking" — so infer each room's convention from its own
+  // real income history (across all time, not just the selected period) rather than
+  // guessing from unitType.
+  const canonicalIncomeRecords = await db.financialRecord.findMany({
+    where: { propertyId, category: 'income', note: { not: null }, accountItem: { in: ['Rent', 'Parking'] } },
+    select: { note: true, accountItem: true },
+  })
+  const canonicalAccountItemByRoom = new Map<string, string>()
+  for (const record of canonicalIncomeRecords) {
+    const note = record.note as string
+    const room = extractRoomTokenFromKnown(note, knownTokens) ?? extractRoomToken(note)
+    if (!room || canonicalAccountItemByRoom.has(room)) continue
+    canonicalAccountItemByRoom.set(room, record.accountItem)
+  }
+
+  function chargeAccountItem(room: string, unitType: string): string {
+    return canonicalAccountItemByRoom.get(room) ?? (unitType === 'Parking' ? 'Parking' : 'Rent')
+  }
+
   for (const [room, snapshot] of latestByRoom) {
-    const key = `${room}|Rent|income`
+    const accountItem = chargeAccountItem(room, snapshot.unitType)
+    const key = `${room}|${accountItem}|income`
     if (!grouped.has(key)) {
-      grouped.set(key, { room, accountItem: 'Rent', category: 'income', amount: 0 })
+      grouped.set(key, { room, accountItem, category: 'income', amount: 0 })
     }
   }
 
   for (const entry of grouped.values()) {
-    if (entry.accountItem !== 'Rent' || entry.category !== 'income') continue
+    if (entry.category !== 'income') continue
     const snapshot = latestByRoom.get(entry.room)
-    if (!snapshot) continue
+    if (!snapshot || entry.accountItem !== chargeAccountItem(entry.room, snapshot.unitType)) continue
 
     if (snapshot.lessee.trim().toLowerCase() === 'vacant') {
       entry.status = 'vacant'

@@ -133,6 +133,26 @@ describe('getRoomBreakdown', () => {
     await db.property.delete({ where: { id: property.id } })
   })
 
+  it('does not add a phantom zero "Rent" row for a Parking unit billed under the "Parking" accountItem', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Parking Test', address: 'x' })
+    await db.rentRollEntry.create({
+      data: { propertyId: property.id, month: '2026-04', roomNumber: '1区画', unitType: 'Parking', lessee: 'Tenant P', monthlyCharge: 14300 },
+    })
+    await db.financialRecord.create({
+      data: { propertyId: property.id, month: '2026-04', category: 'income', accountItem: 'Parking', amount: 14300, recurring: true, lineItemKey: 'rb-park-1', source: 'extracted', note: '1区画-Tenant P 2026-04分Parking' },
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-04'])
+    const parkingEntries = result.filter((r) => r.room === '1区画')
+
+    expect(parkingEntries).toHaveLength(1)
+    expect(parkingEntries[0]).toMatchObject({ accountItem: 'Parking', amount: 14300, status: 'normal' })
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
   it('orders rooms by their source-statement listing position (sortOrder), not alphabetically', async () => {
     const property = await createProperty({ name: 'Room Breakdown Order Test', address: 'x' })
     await db.rentRollEntry.createMany({
