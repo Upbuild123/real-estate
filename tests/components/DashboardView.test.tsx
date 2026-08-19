@@ -188,7 +188,7 @@ describe('DashboardView — Operations view', () => {
       />
     )
 
-    expect(screen.getByText('101-ZHU JIAOJIAO 2026-05分Rent · 101-ZHU JIAOJIAO 2026-06分Rent')).toBeInTheDocument()
+    expect(screen.getByText('101-ZHU JIAOJIAO Rent for 2026-05 · 101-ZHU JIAOJIAO Rent for 2026-06')).toBeInTheDocument()
     expect(screen.queryByText('102-Tenant B 2026-05分Rent')).not.toBeInTheDocument()
   })
 

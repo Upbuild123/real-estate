@@ -10,6 +10,7 @@ import type { YearlyComparisonColumn } from '../../lib/dashboardData'
 import type { UpcomingLeaseExpiration, PortfolioUpcomingLeaseExpiration } from '../../lib/leaseTracking'
 import type { AnomalyFlag } from '@prisma/client'
 import { formatYenCompact } from '../../lib/formatYen'
+import { translateNote } from '../../lib/translateNote'
 import styles from './dashboard.module.css'
 
 export type DashboardViewMode = 'operations' | 'financials' | 'compare'
@@ -117,7 +118,7 @@ function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
                 {showExplanation && (
                   <tr>
                     <td colSpan={4} className={styles.explanationRow}>
-                      {entry.notes.join(' · ')}
+                      {entry.notes.map(translateNote).join(' · ')}
                     </td>
                   </tr>
                 )}
@@ -157,7 +158,7 @@ function ExpenseBreakdownTable({ entries }: { entries: ExpenseBreakdownEntry[] }
               {!entry.recurring && entry.notes.length > 0 && (
                 <tr>
                   <td colSpan={2} className={styles.explanationRow}>
-                    {entry.notes.join(' · ')}
+                    {entry.notes.map(translateNote).join(' · ')}
                   </td>
                 </tr>
               )}
@@ -274,7 +275,7 @@ function FlagsSection({ flags, onResolved }: { flags: AnomalyFlag[]; onResolved:
             <div className={styles.flagRow}>
               <ul className={styles.flagDetailList}>
                 {flag.description.split('; ').map((part, i) => (
-                  <li key={i}>{part}</li>
+                  <li key={i}>{translateNote(part)}</li>
                 ))}
               </ul>
               <button
