@@ -74,6 +74,22 @@ export async function getEarliestMonthWithData(propertyId: string): Promise<stri
   return record?.month ?? null
 }
 
+// The most recent month with any FinancialRecord for this property. Used as the effective
+// "now" for YTD math instead of the real calendar date — debt service/amortized tax/insurance
+// are computed from the loan independent of whether a statement exists yet for a month, so
+// summing YTD through today's actual calendar month (before that month's statement has
+// arrived, which normally happens the 15th-20th of the following month) silently adds a full
+// extra month of debt service with no offsetting income, inflating YTD debt service and
+// making cash flow look worse than it is. Null if the property has no data yet.
+export async function getLatestMonthWithData(propertyId: string): Promise<string | null> {
+  const record = await db.financialRecord.findFirst({
+    where: { propertyId },
+    orderBy: { month: 'desc' },
+    select: { month: true },
+  })
+  return record?.month ?? null
+}
+
 export interface YearlyComparisonColumn {
   year: number
   label: string

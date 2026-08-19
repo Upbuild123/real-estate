@@ -2,6 +2,7 @@ import { listProperties } from '../../lib/properties'
 import {
   getPropertyRangeDashboard,
   getEarliestMonthWithData,
+  getLatestMonthWithData,
   getYearlyComparisonDashboard,
 } from '../../lib/dashboardData'
 import { getRoomBreakdown, getExpenseBreakdown, getIncomeBreakdown } from '../../lib/lineItemBreakdown'
@@ -36,18 +37,35 @@ export default async function DashboardPage({
         ? 'compare'
         : 'operations'
 
-  const earliestMonth = (await getEarliestMonthWithData(propertyId)) ?? new Date().toISOString().slice(0, 7)
-  const periodOptions = listPeriodOptions({ earliestMonth })
+  const [earliestMonth, latestMonth] = await Promise.all([
+    getEarliestMonthWithData(propertyId),
+    getLatestMonthWithData(propertyId),
+  ])
+  const resolvedEarliestMonth = earliestMonth ?? new Date().toISOString().slice(0, 7)
+
+  // "Now" for YTD purposes is the latest month with an actual statement, not today's real
+  // calendar date — a statement normally arrives 15-20 days into the following month, so
+  // blindly summing through today's calendar month would include a month with no income/
+  // expense records yet. Debt service/amortized tax/insurance are computed from the loan
+  // independent of whether a statement exists, so that empty month would still silently add a
+  // full extra month of debt service to the YTD total with nothing to offset it.
+  const effectiveNow = latestMonth
+    ? new Date(Number(latestMonth.split('-')[0]), Number(latestMonth.split('-')[1]) - 1, 1)
+    : new Date()
+
+  const periodOptions = listPeriodOptions({ earliestMonth: resolvedEarliestMonth, asOf: effectiveNow })
 
   const requestedPeriod = resolvedSearchParams.period
   const period =
-    requestedPeriod && PERIOD_PATTERN.test(requestedPeriod) ? requestedPeriod : periodOptions[0]?.value ?? earliestMonth
+    requestedPeriod && PERIOD_PATTERN.test(requestedPeriod)
+      ? requestedPeriod
+      : periodOptions[0]?.value ?? resolvedEarliestMonth
 
   let months: string[]
   try {
-    months = parsePeriod(period)
+    months = parsePeriod(period, effectiveNow)
   } catch {
-    months = parsePeriod(periodOptions[0]?.value ?? earliestMonth)
+    months = parsePeriod(periodOptions[0]?.value ?? resolvedEarliestMonth, effectiveNow)
   }
 
   // Room/expense breakdown and lease expirations are only shown on the Operations view — skip
@@ -60,7 +78,7 @@ export default async function DashboardPage({
       view === 'operations' ? getRoomBreakdown(propertyId, months) : Promise.resolve([]),
       view === 'operations' ? getIncomeBreakdown(propertyId, months) : Promise.resolve([]),
       view === 'operations' ? getExpenseBreakdown(propertyId, months) : Promise.resolve([]),
-      view === 'compare' ? getYearlyComparisonDashboard(propertyId) : Promise.resolve([]),
+      view === 'compare' ? getYearlyComparisonDashboard(propertyId, effectiveNow) : Promise.resolve([]),
       view === 'operations' ? getUpcomingLeaseExpirations(propertyId) : Promise.resolve([]),
       getPortfolioUpcomingLeaseExpirations(),
     ])

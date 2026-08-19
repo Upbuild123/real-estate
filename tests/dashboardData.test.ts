@@ -7,6 +7,7 @@ import {
   getPortfolioDashboard,
   getPropertyRangeDashboard,
   getEarliestMonthWithData,
+  getLatestMonthWithData,
   getYearlyComparisonDashboard,
 } from '../lib/dashboardData'
 
@@ -145,6 +146,27 @@ describe('dashboardData', () => {
     await db.property.delete({ where: { id: property.id } })
   })
 
+  it('returns the latest month with any FinancialRecord for a property', async () => {
+    const property = await createProperty({ name: 'Dash Latest Month Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-03', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'k12', source: 'extracted' },
+        { propertyId: property.id, month: '2026-07', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'k13', source: 'extracted' },
+      ],
+    })
+
+    expect(await getLatestMonthWithData(property.id)).toBe('2026-07')
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('returns null for latest month when the property has no financial records', async () => {
+    const property = await createProperty({ name: 'Dash No Data Latest Test', address: 'x' })
+    expect(await getLatestMonthWithData(property.id)).toBeNull()
+    await db.property.delete({ where: { id: property.id } })
+  })
+
   afterAll(async () => {
     await db.anomalyFlag.deleteMany({})
     await db.financialRecord.deleteMany({})
@@ -159,6 +181,8 @@ describe('dashboardData', () => {
             'Dash Range Test',
             'Dash Earliest Month Test',
             'Dash No Data Test',
+            'Dash Latest Month Test',
+            'Dash No Data Latest Test',
             'Dash Comparison Test',
             'Dash Comparison No Data Test',
           ],
