@@ -131,6 +131,53 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
   })
 }
 
+export interface IncomeBreakdownEntry {
+  accountItem: string
+  amount: number
+  recurring: boolean
+  notes: string[]
+}
+
+// Groups building-wide income line items (no per-unit note, or a note that doesn't match any
+// known room/parking-space label) by accountItem, summed across the given months. This is what
+// surfaces recurring-but-not-room-linked income like a monthly bike-share/rental-cycle fee —
+// without it, that income is invisible everywhere: it's excluded from the Room breakdown (no
+// room to attribute it to) and from Expenses by Category (that table is expense-only), so it
+// only ever shows up folded into the overall Income total with nothing explaining what it was.
+export async function getIncomeBreakdown(propertyId: string, months: string[]): Promise<IncomeBreakdownEntry[]> {
+  const [records, allRentRoll] = await Promise.all([
+    db.financialRecord.findMany({ where: { propertyId, month: { in: months }, category: 'income' } }),
+    db.rentRollEntry.findMany({ where: { propertyId }, select: { roomNumber: true } }),
+  ])
+
+  const knownTokens = Array.from(new Set(allRentRoll.map((r) => r.roomNumber)))
+
+  const grouped = new Map<string, IncomeBreakdownEntry>()
+
+  for (const record of records) {
+    const note = record.note ?? ''
+    if (note) {
+      const room = extractRoomTokenFromKnown(note, knownTokens) ?? extractRoomToken(note)
+      if (room) continue // already attributed to a room in getRoomBreakdown
+    }
+
+    const existing = grouped.get(record.accountItem)
+    if (existing) {
+      existing.amount += record.amount
+      if (note && !existing.notes.includes(note)) existing.notes.push(note)
+    } else {
+      grouped.set(record.accountItem, {
+        accountItem: record.accountItem,
+        amount: record.amount,
+        recurring: record.recurring,
+        notes: note ? [note] : [],
+      })
+    }
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount)
+}
+
 export interface ExpenseBreakdownEntry {
   accountItem: string
   amount: number

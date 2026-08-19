@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
 import type { PeriodOption } from '../../lib/periods'
-import type { RoomBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
+import type { RoomBreakdownEntry, IncomeBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
 import type { YearlyComparisonColumn } from '../../lib/dashboardData'
 import type { UpcomingLeaseExpiration, PortfolioUpcomingLeaseExpiration } from '../../lib/leaseTracking'
 import type { AnomalyFlag } from '@prisma/client'
@@ -125,6 +125,45 @@ function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
               </Fragment>
             )
           })}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
+function IncomeBreakdownTable({ entries }: { entries: IncomeBreakdownEntry[] }) {
+  if (entries.length === 0) return null
+
+  return (
+    <>
+      <h2 className={styles.sectionTitle}>Income by Category</h2>
+      <p className={styles.sectionHint}>
+        Building-wide income not tied to a specific room (e.g. a recurring bike-share fee) — shown here since it
+        wouldn&apos;t otherwise appear anywhere. ⚠ marks anything out of the ordinary.
+      </p>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Yen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <Fragment key={entry.accountItem}>
+              <tr className={entry.recurring ? undefined : styles.flaggedRow}>
+                <td>{entry.accountItem}</td>
+                <td>{formatYenCompact(entry.amount)}</td>
+              </tr>
+              {entry.notes.length > 0 && (
+                <tr>
+                  <td colSpan={2} className={styles.explanationRow}>
+                    {entry.notes.map(translateNote).join(' · ')}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          ))}
         </tbody>
       </table>
     </>
@@ -302,6 +341,7 @@ export function DashboardView(props: {
   view: DashboardViewMode
   dashboard: MonthlyFinancials & { flags: AnomalyFlag[] }
   roomBreakdown: RoomBreakdownEntry[]
+  incomeBreakdown: IncomeBreakdownEntry[]
   expenseBreakdown: ExpenseBreakdownEntry[]
   comparison: YearlyComparisonColumn[]
   upcomingLeaseExpirations: UpcomingLeaseExpiration[]
@@ -378,6 +418,7 @@ export function DashboardView(props: {
               <LeaseExpirationsTable entries={props.upcomingLeaseExpirations} />
 
               <RoomBreakdownTable entries={props.roomBreakdown} />
+              <IncomeBreakdownTable entries={props.incomeBreakdown} />
               <ExpenseBreakdownTable entries={props.expenseBreakdown} />
             </>
           )}

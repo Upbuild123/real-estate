@@ -4,7 +4,7 @@ import {
   getEarliestMonthWithData,
   getYearlyComparisonDashboard,
 } from '../../lib/dashboardData'
-import { getRoomBreakdown, getExpenseBreakdown } from '../../lib/lineItemBreakdown'
+import { getRoomBreakdown, getExpenseBreakdown, getIncomeBreakdown } from '../../lib/lineItemBreakdown'
 import { getUpcomingLeaseExpirations, getPortfolioUpcomingLeaseExpirations } from '../../lib/leaseTracking'
 import { parsePeriod, listPeriodOptions } from '../../lib/periods'
 import { DashboardView, type DashboardViewMode } from './DashboardView'
@@ -54,10 +54,11 @@ export default async function DashboardPage({
   // fetching them on Financials/Compare to avoid unnecessary work. Comparison columns are only
   // fetched on Compare — they span every year of data, not just the selected period. Lease
   // expirations are forward-looking (next 90 days from today), independent of the selected period.
-  const [dashboard, roomBreakdown, expenseBreakdown, comparison, upcomingLeaseExpirations, portfolioLeaseExpirations] =
+  const [dashboard, roomBreakdown, incomeBreakdown, expenseBreakdown, comparison, upcomingLeaseExpirations, portfolioLeaseExpirations] =
     await Promise.all([
       getPropertyRangeDashboard(propertyId, months),
       view === 'operations' ? getRoomBreakdown(propertyId, months) : Promise.resolve([]),
+      view === 'operations' ? getIncomeBreakdown(propertyId, months) : Promise.resolve([]),
       view === 'operations' ? getExpenseBreakdown(propertyId, months) : Promise.resolve([]),
       view === 'compare' ? getYearlyComparisonDashboard(propertyId) : Promise.resolve([]),
       view === 'operations' ? getUpcomingLeaseExpirations(propertyId) : Promise.resolve([]),
@@ -73,6 +74,7 @@ export default async function DashboardPage({
       view={view}
       dashboard={dashboard}
       roomBreakdown={roomBreakdown}
+      incomeBreakdown={incomeBreakdown}
       expenseBreakdown={expenseBreakdown}
       comparison={comparison}
       upcomingLeaseExpirations={upcomingLeaseExpirations}

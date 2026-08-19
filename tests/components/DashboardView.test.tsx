@@ -49,6 +49,7 @@ const DEFAULT_PROPS = {
   view: 'operations' as const,
   dashboard: SAMPLE_DASHBOARD,
   roomBreakdown: [],
+  incomeBreakdown: [],
   expenseBreakdown: [],
   comparison: [],
   upcomingLeaseExpirations: [],
@@ -210,6 +211,24 @@ describe('DashboardView — Operations view', () => {
     expect(screen.queryByText('By Room')).not.toBeInTheDocument()
   })
 
+  it('renders Income by Category with its explanation note, even for a recurring item', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        incomeBreakdown={[{ accountItem: 'Miscellaneous income', amount: 3300, recurring: true, notes: ['rental cycle'] }]}
+      />
+    )
+
+    expect(screen.getByText('Income by Category')).toBeInTheDocument()
+    expect(screen.getByText('Miscellaneous income')).toBeInTheDocument()
+    expect(screen.getByText('rental cycle')).toBeInTheDocument()
+  })
+
+  it('does not render the Income by Category section when there is no income breakdown data', () => {
+    render(<DashboardView {...DEFAULT_PROPS} incomeBreakdown={[]} />)
+    expect(screen.queryByText('Income by Category')).not.toBeInTheDocument()
+  })
+
   it('renders the expense breakdown with normal categories unmarked', () => {
     render(
       <DashboardView
@@ -259,17 +278,19 @@ describe('DashboardView — Financials view', () => {
     expect(screen.getByText('(36K)')).toBeInTheDocument()
   })
 
-  it('does not render Flags, By Room, or Expenses by Category sections', () => {
+  it('does not render Flags, By Room, Income by Category, or Expenses by Category sections', () => {
     render(
       <DashboardView
         {...financialsProps}
         roomBreakdown={[{ room: '101', accountItem: 'Rent', category: 'income', amount: 125000, notes: [] }]}
+        incomeBreakdown={[{ accountItem: 'Miscellaneous income', amount: 3300, recurring: true, notes: [] }]}
         expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true, notes: [] }]}
       />
     )
 
     expect(screen.queryByText('Flags')).not.toBeInTheDocument()
     expect(screen.queryByText('By Room')).not.toBeInTheDocument()
+    expect(screen.queryByText('Income by Category')).not.toBeInTheDocument()
     expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
   })
 })
