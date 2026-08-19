@@ -117,21 +117,39 @@ describe('DashboardView — Operations view', () => {
     vi.unstubAllGlobals()
   })
 
-  it('groups room breakdown entries under a room header', () => {
+  it('renders one line per room/item, with the room label on every row', () => {
     render(
       <DashboardView
         {...DEFAULT_PROPS}
         roomBreakdown={[
-          { room: '101', accountItem: 'Rent', category: 'income', amount: 125000 },
+          { room: '101', accountItem: 'Rent', category: 'income', amount: 125000, status: 'normal' },
           { room: '101', accountItem: 'Repair expense', category: 'expense', amount: 20000 },
         ]}
       />
     )
 
-    expect(screen.getByText('Room 101')).toBeInTheDocument()
+    expect(screen.getAllByText('101')).toHaveLength(2)
     expect(screen.getByText('Rent')).toBeInTheDocument()
     expect(screen.getByText('Repair expense')).toBeInTheDocument()
     expect(screen.getByText('125K')).toBeInTheDocument()
+    expect(screen.getByText('Normal')).toBeInTheDocument()
+  })
+
+  it('renders each rent-collection status label: vacant, arrears, and additional collected', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        roomBreakdown={[
+          { room: '102', accountItem: 'Rent', category: 'income', amount: 0, status: 'vacant' },
+          { room: '103', accountItem: 'Rent', category: 'income', amount: 30000, status: 'arrears' },
+          { room: '104', accountItem: 'Rent', category: 'income', amount: 140000, status: 'additional' },
+        ]}
+      />
+    )
+
+    expect(screen.getByText('Vacant')).toBeInTheDocument()
+    expect(screen.getByText('Arrears')).toBeInTheDocument()
+    expect(screen.getByText('Additional collected')).toBeInTheDocument()
   })
 
   it('does not render the By Room section when there is no room breakdown data', () => {

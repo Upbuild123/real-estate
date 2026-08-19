@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isRecurringAccountItem } from '../../lib/extraction/statementSchema'
+import { isRecurringAccountItem, isRecurringLineItem } from '../../lib/extraction/statementSchema'
 
 describe('isRecurringAccountItem', () => {
   it('classifies rent, PM fee, electricity, cleaning, elevator maintenance as recurring', () => {
@@ -34,5 +34,22 @@ describe('isRecurringAccountItem', () => {
   it('is case-insensitive and tolerant of surrounding whitespace', () => {
     expect(isRecurringAccountItem('  rent  ')).toBe(true)
     expect(isRecurringAccountItem('ELECTRICITY CHARGE')).toBe(true)
+  })
+})
+
+describe('isRecurringLineItem', () => {
+  it('treats D05\'s monthly rental/share-cycle income (filed under the generic "Other Income" accountItem) as recurring, based on the note', () => {
+    expect(isRecurringLineItem('Other Income', 'Rental cycle')).toBe(true)
+    expect(isRecurringLineItem('Other Income', 'rental cycle')).toBe(true)
+    expect(isRecurringLineItem('Other Income', 'Share Cycle')).toBe(true)
+  })
+
+  it('still treats other "Other Income" line items as one-time', () => {
+    expect(isRecurringLineItem('Other Income', 'Some unrelated windfall')).toBe(false)
+  })
+
+  it('falls back to the accountItem classification when the note does not match a known recurring pattern', () => {
+    expect(isRecurringLineItem('Rent', '101-Tenant A 2026-08分Rent')).toBe(true)
+    expect(isRecurringLineItem('Renewal fee', '301-Tenant B 更新事務手数料')).toBe(false)
   })
 })

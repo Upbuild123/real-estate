@@ -34,6 +34,123 @@ describe('getRoomBreakdown', () => {
     await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
     await db.property.delete({ where: { id: property.id } })
   })
+
+  it('matches a unit label that only exists in the rent roll (e.g. "roof top"), not a digit/letter pattern', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Antenna Test', address: 'x' })
+    await db.rentRollEntry.create({
+      data: { propertyId: property.id, month: '2026-08', roomNumber: 'roof top', unitType: 'Parking', lessee: 'Antenna', monthlyCharge: 66000, leaseStart: '2019-12-01', leaseEnd: null },
+    })
+    await db.financialRecord.create({
+      data: { propertyId: property.id, month: '2026-08', category: 'income', accountItem: 'Rent', amount: 66000, recurring: true, lineItemKey: 'rb-antenna', source: 'extracted', note: 'roof top-Antenna 2026-08分Rent' },
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-08'])
+
+    const antenna = result.find((r) => r.room === 'roof top')
+    expect(antenna?.amount).toBe(66000)
+    expect(antenna?.status).toBe('normal')
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('tags each room\'s Rent entry with a collection status: normal, vacant, arrears, or additional', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Status Test', address: 'x' })
+    await db.rentRollEntry.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-08', roomNumber: '101', unitType: 'Residence', lessee: 'Tenant A', monthlyCharge: 100000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+        { propertyId: property.id, month: '2026-08', roomNumber: '102', unitType: 'Residence', lessee: 'vacant', monthlyCharge: 90000, leaseStart: null, leaseEnd: null },
+        { propertyId: property.id, month: '2026-08', roomNumber: '103', unitType: 'Residence', lessee: 'Tenant C', monthlyCharge: 80000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+        { propertyId: property.id, month: '2026-08', roomNumber: '104', unitType: 'Residence', lessee: 'Tenant D', monthlyCharge: 70000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+      ],
+    })
+    await db.financialRecord.createMany({
+      data: [
+        // 101: paid exactly the expected amount
+        { propertyId: property.id, month: '2026-08', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'rb-s1', source: 'extracted', note: '101-Tenant A 2026-08分Rent' },
+        // 102: vacant, no income line item at all
+        // 103: occupied but underpaid (partial arrears)
+        { propertyId: property.id, month: '2026-08', category: 'income', accountItem: 'Rent', amount: 30000, recurring: true, lineItemKey: 'rb-s3', source: 'extracted', note: '103-Tenant C 2026-08分Rent' },
+        // 104: paid more than expected (e.g. two months collected at once)
+        { propertyId: property.id, month: '2026-08', category: 'income', accountItem: 'Rent', amount: 140000, recurring: true, lineItemKey: 'rb-s4', source: 'extracted', note: '104-Tenant D 2026-08分Rent' },
+      ],
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-08'])
+
+    expect(result.find((r) => r.room === '101')?.status).toBe('normal')
+    expect(result.find((r) => r.room === '102')?.status).toBe('vacant')
+    expect(result.find((r) => r.room === '102')?.amount).toBe(0)
+    expect(result.find((r) => r.room === '103')?.status).toBe('arrears')
+    expect(result.find((r) => r.room === '104')?.status).toBe('additional')
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('when occupied with zero rent collected, tags status as arrears (not silently omitted)', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Full Arrears Test', address: 'x' })
+    await db.rentRollEntry.create({
+      data: { propertyId: property.id, month: '2026-08', roomNumber: '201', unitType: 'Residence', lessee: 'Tenant E', monthlyCharge: 100000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+    })
+    // No FinancialRecord at all for room 201 this month — nothing was collected.
+
+    const result = await getRoomBreakdown(property.id, ['2026-08'])
+
+    const room201 = result.find((r) => r.room === '201')
+    expect(room201?.amount).toBe(0)
+    expect(room201?.status).toBe('arrears')
+
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('multiplies expected rent by the number of selected months for a multi-month period', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Multi Month Test', address: 'x' })
+    await db.rentRollEntry.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-01', roomNumber: '301', unitType: 'Residence', lessee: 'Tenant F', monthlyCharge: 100000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+        { propertyId: property.id, month: '2026-02', roomNumber: '301', unitType: 'Residence', lessee: 'Tenant F', monthlyCharge: 100000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+      ],
+    })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'rb-mm1', source: 'extracted', note: '301-Tenant F 2026-01分Rent' },
+        { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'rb-mm2', source: 'extracted', note: '301-Tenant F 2026-02分Rent' },
+      ],
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-01', '2026-02'])
+
+    const room301 = result.find((r) => r.room === '301')
+    expect(room301?.amount).toBe(200000)
+    expect(room301?.status).toBe('normal') // 200000 collected == 100000 * 2 months expected
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('orders rooms by their source-statement listing position (sortOrder), not alphabetically', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Order Test', address: 'x' })
+    await db.rentRollEntry.createMany({
+      data: [
+        // Deliberately out of alphabetical order to prove sortOrder wins
+        { propertyId: property.id, month: '2026-08', roomNumber: '502', unitType: 'Residence', lessee: 'Tenant A', monthlyCharge: 100000, sortOrder: 0 },
+        { propertyId: property.id, month: '2026-08', roomNumber: '101', unitType: 'Residence', lessee: 'Tenant B', monthlyCharge: 100000, sortOrder: 1 },
+        { propertyId: property.id, month: '2026-08', roomNumber: 'roof top', unitType: 'Parking', lessee: 'Antenna', monthlyCharge: 5000, sortOrder: 2 },
+      ],
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-08'])
+
+    expect(result.map((r) => r.room)).toEqual(['502', '101', 'roof top'])
+
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
 })
 
 describe('getExpenseBreakdown', () => {

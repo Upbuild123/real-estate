@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
@@ -70,15 +70,15 @@ function MetricsTable({ rows, dashboard }: { rows: typeof FINANCIALS_METRIC_ROWS
   )
 }
 
+const STATUS_LABELS: Record<NonNullable<RoomBreakdownEntry['status']>, string> = {
+  normal: 'Normal',
+  vacant: 'Vacant',
+  arrears: 'Arrears',
+  additional: 'Additional collected',
+}
+
 function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
   if (entries.length === 0) return null
-
-  const rooms = new Map<string, RoomBreakdownEntry[]>()
-  for (const entry of entries) {
-    const list = rooms.get(entry.room) ?? []
-    list.push(entry)
-    rooms.set(entry.room, list)
-  }
 
   return (
     <>
@@ -90,27 +90,26 @@ function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Room / Item</th>
+            <th>Room</th>
+            <th>Item</th>
             <th>Yen</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          {Array.from(rooms.entries()).map(([room, items]) => (
-            <Fragment key={room}>
-              <tr className={styles.roomGroupLabel}>
-                <td colSpan={2}>Room {room}</td>
+          {entries.map((entry) => {
+            const { text, negative } = formatCell(entry.category === 'expense' ? -entry.amount : entry.amount)
+            return (
+              <tr key={`${entry.room}-${entry.accountItem}-${entry.category}`}>
+                <td>{entry.room}</td>
+                <td className={styles.itemLabel}>{entry.accountItem}</td>
+                <td className={negative ? styles.negative : undefined}>{text}</td>
+                <td className={entry.status && entry.status !== 'normal' ? styles.statusFlag : undefined}>
+                  {entry.status ? STATUS_LABELS[entry.status] : ''}
+                </td>
               </tr>
-              {items.map((item) => {
-                const { text, negative } = formatCell(item.category === 'expense' ? -item.amount : item.amount)
-                return (
-                  <tr key={`${room}-${item.accountItem}-${item.category}`}>
-                    <td className={styles.itemLabel}>{item.accountItem}</td>
-                    <td className={negative ? styles.negative : undefined}>{text}</td>
-                  </tr>
-                )
-              })}
-            </Fragment>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </>

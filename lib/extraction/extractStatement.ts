@@ -2,7 +2,7 @@ import { db } from '../db'
 import { extractStructuredDataFromPdf, extractStructuredDataFromText, ExtractionParseError } from '../claudeClient'
 import { xlsxToText } from '../xlsxParser'
 import {
-  isRecurringAccountItem,
+  isRecurringLineItem,
   STATEMENT_SCHEMA_DESCRIPTION,
   type StatementExtraction,
   type StatementLineItem,
@@ -100,7 +100,7 @@ export async function ingestStatement(
       lineItemKey,
       note: item.note,
       amount: item.total,
-      recurring: isRecurringAccountItem(item.accountItem),
+      recurring: isRecurringLineItem(item.accountItem, item.note),
       source: 'extracted' as const,
       extractionId: extraction.id,
     }))
@@ -114,13 +114,14 @@ export async function ingestStatement(
   await db.rentRollEntry.deleteMany({ where: { propertyId: params.propertyId, month: extracted.activityMonth } })
   if (extracted.rentRoll.length > 0) {
     await db.rentRollEntry.createMany({
-      data: extracted.rentRoll.map((entry) => ({
+      data: extracted.rentRoll.map((entry, sortOrder) => ({
         propertyId: params.propertyId,
         month: extracted.activityMonth,
         roomNumber: entry.roomNumber,
         unitType: entry.unitType,
         lessee: entry.lessee,
         monthlyCharge: entry.monthlyCharge,
+        sortOrder,
         leaseStart: entry.leaseStart,
         leaseEnd: entry.leaseEnd,
         extractionId: extraction.id,

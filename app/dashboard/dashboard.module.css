@@ -146,18 +146,16 @@
   margin-bottom: 12px;
 }
 
-.roomGroupLabel td {
-  font-weight: 600;
-  background: var(--table-stripe);
-  padding-top: 12px;
-}
-
 .itemLabel {
-  padding-left: 24px !important;
   color: var(--muted-text);
 }
 
 .flaggedRow td:first-child::before {
   content: '⚠ ';
   color: var(--flag-text);
+}
+
+.statusFlag {
+  color: var(--flag-text);
+  font-weight: 600;
 }

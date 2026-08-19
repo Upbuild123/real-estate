@@ -109,6 +109,7 @@ model RentRollEntry {
   monthlyCharge Int
   leaseStart    String?     // "YYYY-MM-DD"
   leaseEnd      String?     // "YYYY-MM-DD"
+  sortOrder     Int         @default(0) // position within the source statement's rent roll listing, for display in the PM's original order
   extractionId  String?
   extraction    Extraction? @relation(fields: [extractionId], references: [id])
   createdAt     DateTime    @default(now())

@@ -102,6 +102,7 @@ describe('ingestStatement', () => {
       monthlyCharge: 125000,
       leaseStart: '2024-03-28',
       leaseEnd: '2026-03-27',
+      sortOrder: 0,
     })
   })
 

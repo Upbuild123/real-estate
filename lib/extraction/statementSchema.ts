@@ -47,6 +47,18 @@ export function isRecurringAccountItem(accountItem: string): boolean {
   return RECURRING_ACCOUNT_ITEMS.some((known) => normalized === known)
 }
 
+// Some real recurring income is filed under a generic accountItem (e.g. D05's monthly
+// bike-share/rental-cycle income is extracted as "Other Income", too broad a bucket to mark
+// recurring outright since it also covers genuine one-off windfalls) — the specific note text
+// is what actually identifies it as the same recurring ~3300/mo item every month.
+const RECURRING_NOTE_PATTERNS = ['rental cycle', 'share cycle']
+
+export function isRecurringLineItem(accountItem: string, note: string): boolean {
+  if (isRecurringAccountItem(accountItem)) return true
+  const normalizedNote = note.trim().toLowerCase()
+  return RECURRING_NOTE_PATTERNS.some((pattern) => normalizedNote.includes(pattern))
+}
+
 export const STATEMENT_SCHEMA_DESCRIPTION = `
 {
   "propertyName": string,
