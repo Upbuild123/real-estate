@@ -94,6 +94,31 @@ describe('DashboardView — Operations view', () => {
     expect(screen.getByText('Net cash flow is negative')).toBeInTheDocument()
   })
 
+  it('splits a semicolon-joined flag description into separate bullet items', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        dashboard={{
+          ...SAMPLE_DASHBOARD,
+          flags: [
+            {
+              id: 'f2',
+              propertyId: 'p1',
+              month: '2026-04',
+              ruleType: 'non_recurring_item',
+              description: '+Renewal Fee: 66000 (402-item); -Deposit refund: 119000 (101-item)',
+              status: 'open',
+              createdAt: new Date(),
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText('+Renewal Fee: 66000 (402-item)')).toBeInTheDocument()
+    expect(screen.getByText('-Deposit refund: 119000 (101-item)')).toBeInTheDocument()
+  })
+
   it('does not render a Flags section when there are no open flags', () => {
     render(<DashboardView {...DEFAULT_PROPS} dashboard={{ ...SAMPLE_DASHBOARD, flags: [] }} />)
     expect(screen.queryByText('Flags')).not.toBeInTheDocument()
@@ -122,8 +147,8 @@ describe('DashboardView — Operations view', () => {
       <DashboardView
         {...DEFAULT_PROPS}
         roomBreakdown={[
-          { room: '101', accountItem: 'Rent', category: 'income', amount: 125000, status: 'normal' },
-          { room: '101', accountItem: 'Repair expense', category: 'expense', amount: 20000 },
+          { room: '101', accountItem: 'Rent', category: 'income', amount: 125000, status: 'normal', notes: [] },
+          { room: '101', accountItem: 'Repair expense', category: 'expense', amount: 20000, notes: [] },
         ]}
       />
     )
@@ -140,9 +165,9 @@ describe('DashboardView — Operations view', () => {
       <DashboardView
         {...DEFAULT_PROPS}
         roomBreakdown={[
-          { room: '102', accountItem: 'Rent', category: 'income', amount: 0, status: 'vacant' },
-          { room: '103', accountItem: 'Rent', category: 'income', amount: 30000, status: 'arrears' },
-          { room: '104', accountItem: 'Rent', category: 'income', amount: 140000, status: 'additional' },
+          { room: '102', accountItem: 'Rent', category: 'income', amount: 0, status: 'vacant', notes: [] },
+          { room: '103', accountItem: 'Rent', category: 'income', amount: 30000, status: 'arrears', notes: [] },
+          { room: '104', accountItem: 'Rent', category: 'income', amount: 140000, status: 'additional', notes: [] },
         ]}
       />
     )
@@ -150,6 +175,34 @@ describe('DashboardView — Operations view', () => {
     expect(screen.getByText('Vacant')).toBeInTheDocument()
     expect(screen.getByText('Arrears')).toBeInTheDocument()
     expect(screen.getByText('Additional collected')).toBeInTheDocument()
+  })
+
+  it('shows an explanation for a room with additional rent collected, but not for a normal room', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        roomBreakdown={[
+          { room: '101', accountItem: 'Rent', category: 'income', amount: 250000, status: 'additional', notes: ['101-ZHU JIAOJIAO 2026-05分Rent', '101-ZHU JIAOJIAO 2026-06分Rent'] },
+          { room: '102', accountItem: 'Rent', category: 'income', amount: 125000, status: 'normal', notes: ['102-Tenant B 2026-05分Rent'] },
+        ]}
+      />
+    )
+
+    expect(screen.getByText('101-ZHU JIAOJIAO 2026-05分Rent · 101-ZHU JIAOJIAO 2026-06分Rent')).toBeInTheDocument()
+    expect(screen.queryByText('102-Tenant B 2026-05分Rent')).not.toBeInTheDocument()
+  })
+
+  it('always shows an explanation for a room-linked expense', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        roomBreakdown={[
+          { room: 'B202', accountItem: 'Restoration cost', category: 'expense', amount: 93843, notes: ['B202-Water leak restoration work'] },
+        ]}
+      />
+    )
+
+    expect(screen.getByText('B202-Water leak restoration work')).toBeInTheDocument()
   })
 
   it('does not render the By Room section when there is no room breakdown data', () => {
@@ -161,7 +214,7 @@ describe('DashboardView — Operations view', () => {
     render(
       <DashboardView
         {...DEFAULT_PROPS}
-        expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true }]}
+        expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true, notes: [] }]}
       />
     )
 
@@ -172,6 +225,21 @@ describe('DashboardView — Operations view', () => {
   it('does not render the Expenses by Category section when there is no expense breakdown data', () => {
     render(<DashboardView {...DEFAULT_PROPS} expenseBreakdown={[]} />)
     expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
+  })
+
+  it('shows an explanation for a flagged (non-recurring) expense category, but not a normal one', () => {
+    render(
+      <DashboardView
+        {...DEFAULT_PROPS}
+        expenseBreakdown={[
+          { accountItem: 'Building Management fee', amount: 74000, recurring: false, notes: ['B102-Restoration from water leak'] },
+          { accountItem: 'Property management fee', amount: 40000, recurring: true, notes: ['2026-05 管理委託料支払い'] },
+        ]}
+      />
+    )
+
+    expect(screen.getByText('B102-Restoration from water leak')).toBeInTheDocument()
+    expect(screen.queryByText('2026-05 管理委託料支払い')).not.toBeInTheDocument()
   })
 })
 
@@ -195,8 +263,8 @@ describe('DashboardView — Financials view', () => {
     render(
       <DashboardView
         {...financialsProps}
-        roomBreakdown={[{ room: '101', accountItem: 'Rent', category: 'income', amount: 125000 }]}
-        expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true }]}
+        roomBreakdown={[{ room: '101', accountItem: 'Rent', category: 'income', amount: 125000, notes: [] }]}
+        expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true, notes: [] }]}
       />
     )
 

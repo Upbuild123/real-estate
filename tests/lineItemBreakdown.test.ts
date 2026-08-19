@@ -133,6 +133,29 @@ describe('getRoomBreakdown', () => {
     await db.property.delete({ where: { id: property.id } })
   })
 
+  it('collects the distinct source notes for a room/item, so an unusual amount can be explained', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Notes Test', address: 'x' })
+    await db.rentRollEntry.create({
+      data: { propertyId: property.id, month: '2026-05', roomNumber: '101', unitType: 'Residence', lessee: 'ZHU JIAOJIAO', monthlyCharge: 125000, leaseStart: '2024-01-01', leaseEnd: '2026-12-31' },
+    })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-05', category: 'income', accountItem: 'Rent', amount: 125000, recurring: true, lineItemKey: 'rb-n1', source: 'extracted', note: '101-ZHU JIAOJIAO 2026-05分Rent' },
+        { propertyId: property.id, month: '2026-05', category: 'income', accountItem: 'Rent', amount: 125000, recurring: true, lineItemKey: 'rb-n2', source: 'extracted', note: '101-ZHU JIAOJIAO 2026-06分Rent' },
+      ],
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-05'])
+    const room101 = result.find((r) => r.room === '101')
+
+    expect(room101?.status).toBe('additional')
+    expect(room101?.notes).toEqual(['101-ZHU JIAOJIAO 2026-05分Rent', '101-ZHU JIAOJIAO 2026-06分Rent'])
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
   it('does not add a phantom zero "Rent" row for a Parking unit billed under the "Parking" accountItem', async () => {
     const property = await createProperty({ name: 'Room Breakdown Parking Test', address: 'x' })
     await db.rentRollEntry.create({
@@ -196,6 +219,24 @@ describe('getExpenseBreakdown', () => {
     expect(repair?.recurring).toBe(false)
 
     expect(result.some((r) => r.accountItem === 'Rent')).toBe(false)
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('collects the distinct source notes for an accountItem, so an unusual expense can be explained', async () => {
+    const property = await createProperty({ name: 'Expense Breakdown Notes Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Building Management fee', amount: 30000, recurring: false, lineItemKey: 'eb-n1', source: 'extracted', note: 'B301,B201-Water leak investigation' },
+        { propertyId: property.id, month: '2026-02', category: 'expense', accountItem: 'Building Management fee', amount: 74000, recurring: false, lineItemKey: 'eb-n2', source: 'extracted', note: 'B102-Restoration from water leak' },
+      ],
+    })
+
+    const result = await getExpenseBreakdown(property.id, ['2026-01', '2026-02'])
+    const buildingFee = result.find((r) => r.accountItem === 'Building Management fee')
+
+    expect(buildingFee?.notes).toEqual(['B301,B201-Water leak investigation', 'B102-Restoration from water leak'])
 
     await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
     await db.property.delete({ where: { id: property.id } })

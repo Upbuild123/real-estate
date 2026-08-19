@@ -9,6 +9,7 @@ export interface RoomBreakdownEntry {
   category: 'income' | 'expense'
   amount: number
   status?: RentCollectionStatus
+  notes: string[]
 }
 
 // Groups income/expense line items by room and accountItem, summed across the given months.
@@ -37,12 +38,14 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
     const existing = grouped.get(key)
     if (existing) {
       existing.amount += record.amount
+      if (!existing.notes.includes(note)) existing.notes.push(note)
     } else {
       grouped.set(key, {
         room,
         accountItem: record.accountItem,
         category: record.category as 'income' | 'expense',
         amount: record.amount,
+        notes: [note],
       })
     }
   }
@@ -85,7 +88,7 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
     const accountItem = chargeAccountItem(room, snapshot.unitType)
     const key = `${room}|${accountItem}|income`
     if (!grouped.has(key)) {
-      grouped.set(key, { room, accountItem, category: 'income', amount: 0 })
+      grouped.set(key, { room, accountItem, category: 'income', amount: 0, notes: [] })
     }
   }
 
@@ -132,11 +135,14 @@ export interface ExpenseBreakdownEntry {
   accountItem: string
   amount: number
   recurring: boolean
+  notes: string[]
 }
 
 // Groups expense line items by accountItem, summed across the given months. `recurring`
 // reflects the deterministic lookup table (lib/extraction/statementSchema.ts) — the same
-// "normal" classification the non_recurring_item anomaly rule uses.
+// "normal" classification the non_recurring_item anomaly rule uses. `notes` collects the
+// distinct source line-item notes, so a flagged/non-recurring category can show why it's
+// there (e.g. what the building maintenance charge was actually for).
 export async function getExpenseBreakdown(propertyId: string, months: string[]): Promise<ExpenseBreakdownEntry[]> {
   const records = await db.financialRecord.findMany({
     where: { propertyId, month: { in: months }, category: 'expense' },
@@ -145,14 +151,17 @@ export async function getExpenseBreakdown(propertyId: string, months: string[]):
   const grouped = new Map<string, ExpenseBreakdownEntry>()
 
   for (const record of records) {
+    const note = record.note ?? ''
     const existing = grouped.get(record.accountItem)
     if (existing) {
       existing.amount += record.amount
+      if (note && !existing.notes.includes(note)) existing.notes.push(note)
     } else {
       grouped.set(record.accountItem, {
         accountItem: record.accountItem,
         amount: record.amount,
         recurring: record.recurring,
+        notes: note ? [note] : [],
       })
     }
   }

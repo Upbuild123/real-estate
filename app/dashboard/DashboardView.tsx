@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
@@ -99,15 +99,29 @@ function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
         <tbody>
           {entries.map((entry) => {
             const { text, negative } = formatCell(entry.category === 'expense' ? -entry.amount : entry.amount)
+            // Explain the unusual cases: extra rent collected (why more than expected came in),
+            // and any room-linked expense (these are never routine — a normal recurring cost
+            // like PM fee/utilities is building-wide, not per-room).
+            const showExplanation =
+              entry.notes.length > 0 && (entry.category === 'expense' || entry.status === 'additional')
             return (
-              <tr key={`${entry.room}-${entry.accountItem}-${entry.category}`}>
-                <td>{entry.room}</td>
-                <td className={styles.itemLabel}>{entry.accountItem}</td>
-                <td className={negative ? styles.negative : undefined}>{text}</td>
-                <td className={entry.status && entry.status !== 'normal' ? styles.statusFlag : undefined}>
-                  {entry.status ? STATUS_LABELS[entry.status] : ''}
-                </td>
-              </tr>
+              <Fragment key={`${entry.room}-${entry.accountItem}-${entry.category}`}>
+                <tr>
+                  <td>{entry.room}</td>
+                  <td className={styles.itemLabel}>{entry.accountItem}</td>
+                  <td className={negative ? styles.negative : undefined}>{text}</td>
+                  <td className={entry.status && entry.status !== 'normal' ? styles.statusFlag : undefined}>
+                    {entry.status ? STATUS_LABELS[entry.status] : ''}
+                  </td>
+                </tr>
+                {showExplanation && (
+                  <tr>
+                    <td colSpan={4} className={styles.explanationRow}>
+                      {entry.notes.join(' · ')}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             )
           })}
         </tbody>
@@ -135,10 +149,19 @@ function ExpenseBreakdownTable({ entries }: { entries: ExpenseBreakdownEntry[] }
         </thead>
         <tbody>
           {entries.map((entry) => (
-            <tr key={entry.accountItem} className={entry.recurring ? undefined : styles.flaggedRow}>
-              <td>{entry.accountItem}</td>
-              <td>{formatYenCompact(entry.amount)}</td>
-            </tr>
+            <Fragment key={entry.accountItem}>
+              <tr className={entry.recurring ? undefined : styles.flaggedRow}>
+                <td>{entry.accountItem}</td>
+                <td>{formatYenCompact(entry.amount)}</td>
+              </tr>
+              {!entry.recurring && entry.notes.length > 0 && (
+                <tr>
+                  <td colSpan={2} className={styles.explanationRow}>
+                    {entry.notes.join(' · ')}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -245,18 +268,24 @@ function FlagsSection({ flags, onResolved }: { flags: AnomalyFlag[]; onResolved:
   return (
     <div className={styles.flagsSection}>
       <h2>Flags</h2>
-      <ul>
+      <ul className={styles.flagsList}>
         {flags.map((flag) => (
-          <li key={flag.id}>
-            {flag.description}
-            <button
-              type="button"
-              className={styles.resolveButton}
-              disabled={resolvingId === flag.id}
-              onClick={() => resolve(flag.id)}
-            >
-              {resolvingId === flag.id ? 'Resolving…' : 'Resolve'}
-            </button>
+          <li key={flag.id} className={styles.flagItem}>
+            <div className={styles.flagRow}>
+              <ul className={styles.flagDetailList}>
+                {flag.description.split('; ').map((part, i) => (
+                  <li key={i}>{part}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className={styles.resolveButton}
+                disabled={resolvingId === flag.id}
+                onClick={() => resolve(flag.id)}
+              >
+                {resolvingId === flag.id ? 'Resolving…' : 'Resolve'}
+              </button>
+            </div>
           </li>
         ))}
       </ul>
