@@ -1,21 +1,31 @@
 import { listProperties } from '../../lib/properties'
 import {
   getPropertyRangeDashboard,
+  getPortfolioRangeDashboard,
   getEarliestMonthWithData,
   getLatestMonthWithData,
+  getPortfolioEarliestMonthWithData,
+  getPortfolioLatestMonthWithData,
   getYearlyComparisonDashboard,
 } from '../../lib/dashboardData'
-import { getRoomBreakdown, getExpenseBreakdown, getIncomeBreakdown } from '../../lib/lineItemBreakdown'
+import { getRoomBreakdown, getExpenseBreakdown } from '../../lib/lineItemBreakdown'
 import { getUpcomingLeaseExpirations, getPortfolioUpcomingLeaseExpirations } from '../../lib/leaseTracking'
+import { getLoanForProperty, loanBalanceRange, getPortfolioLoanBalanceRange } from '../../lib/loans'
 import { parsePeriod, listPeriodOptions } from '../../lib/periods'
 import { DashboardView, type DashboardViewMode } from './DashboardView'
 import styles from './dashboard.module.css'
+import type { AnomalyFlag } from '@prisma/client'
 
 // This page reads live DB state (financials, anomaly flags) and per-request query params
 // (propertyId/period/view) — it must never be statically prerendered at build time.
 export const dynamic = 'force-dynamic'
 
 const PERIOD_PATTERN = /^\d{4}-(\d{2}|full|ytd)$/
+
+// A pseudo-property, not a real row in the Property table — selecting it sums every active
+// property's financials together. Only the Financials view makes sense for it: per-room
+// breakdown, flags, and anomaly detection are all inherently single-property concepts.
+export const COMBINED_PROPERTY_ID = 'combined'
 
 export default async function DashboardPage({
   searchParams,
@@ -30,16 +40,19 @@ export default async function DashboardPage({
     return <p className={styles.empty}>No properties found. Add a property to get started.</p>
   }
 
-  const view: DashboardViewMode =
-    resolvedSearchParams.view === 'financials'
+  const isCombined = propertyId === COMBINED_PROPERTY_ID
+
+  const view: DashboardViewMode = isCombined
+    ? 'financials'
+    : resolvedSearchParams.view === 'financials'
       ? 'financials'
       : resolvedSearchParams.view === 'compare'
         ? 'compare'
         : 'operations'
 
   const [earliestMonth, latestMonth] = await Promise.all([
-    getEarliestMonthWithData(propertyId),
-    getLatestMonthWithData(propertyId),
+    isCombined ? getPortfolioEarliestMonthWithData() : getEarliestMonthWithData(propertyId),
+    isCombined ? getPortfolioLatestMonthWithData() : getLatestMonthWithData(propertyId),
   ])
   const resolvedEarliestMonth = earliestMonth ?? new Date().toISOString().slice(0, 7)
 
@@ -68,35 +81,44 @@ export default async function DashboardPage({
     months = parsePeriod(periodOptions[0]?.value ?? resolvedEarliestMonth, effectiveNow)
   }
 
+  const loanReferenceMonth = latestMonth ?? months[months.length - 1]
+
   // Room/expense breakdown and lease expirations are only shown on the Operations view — skip
   // fetching them on Financials/Compare to avoid unnecessary work. Comparison columns are only
   // fetched on Compare — they span every year of data, not just the selected period. Lease
-  // expirations are forward-looking (next 90 days from today), independent of the selected period.
-  const [dashboard, roomBreakdown, incomeBreakdown, expenseBreakdown, comparison, upcomingLeaseExpirations, portfolioLeaseExpirations] =
+  // expirations are forward-looking (next 90 days from today), independent of the selected
+  // period. Loan balance is only shown on the Financials view (single-property or combined).
+  const [dashboard, roomBreakdown, expenseBreakdown, comparison, upcomingLeaseExpirations, portfolioLeaseExpirations, loanBalance] =
     await Promise.all([
-      getPropertyRangeDashboard(propertyId, months),
-      view === 'operations' ? getRoomBreakdown(propertyId, months) : Promise.resolve([]),
-      view === 'operations' ? getIncomeBreakdown(propertyId, months) : Promise.resolve([]),
-      view === 'operations' ? getExpenseBreakdown(propertyId, months) : Promise.resolve([]),
-      view === 'compare' ? getYearlyComparisonDashboard(propertyId, effectiveNow) : Promise.resolve([]),
-      view === 'operations' ? getUpcomingLeaseExpirations(propertyId) : Promise.resolve([]),
+      isCombined
+        ? getPortfolioRangeDashboard(months).then((f) => ({ ...f, flags: [] as AnomalyFlag[] }))
+        : getPropertyRangeDashboard(propertyId, months),
+      !isCombined && view === 'operations' ? getRoomBreakdown(propertyId, months) : Promise.resolve([]),
+      !isCombined && view === 'operations' ? getExpenseBreakdown(propertyId, months) : Promise.resolve([]),
+      !isCombined && view === 'compare' ? getYearlyComparisonDashboard(propertyId, effectiveNow) : Promise.resolve([]),
+      !isCombined && view === 'operations' ? getUpcomingLeaseExpirations(propertyId) : Promise.resolve([]),
       getPortfolioUpcomingLeaseExpirations(),
+      view === 'financials'
+        ? isCombined
+          ? getPortfolioLoanBalanceRange(months, loanReferenceMonth)
+          : getLoanForProperty(propertyId).then((loan) => (loan ? loanBalanceRange(loan, months, loanReferenceMonth) : null))
+        : Promise.resolve(null),
     ])
 
   return (
     <DashboardView
-      properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+      properties={[...properties.map((p) => ({ id: p.id, name: p.name })), { id: COMBINED_PROPERTY_ID, name: 'Combined' }]}
       selectedPropertyId={propertyId}
       period={period}
       periodOptions={periodOptions}
       view={view}
       dashboard={dashboard}
       roomBreakdown={roomBreakdown}
-      incomeBreakdown={incomeBreakdown}
       expenseBreakdown={expenseBreakdown}
       comparison={comparison}
       upcomingLeaseExpirations={upcomingLeaseExpirations}
       portfolioLeaseExpirations={portfolioLeaseExpirations}
+      loanBalance={loanBalance}
     />
   )
 }

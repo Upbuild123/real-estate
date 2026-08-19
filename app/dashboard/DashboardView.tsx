@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { MonthlyFinancials } from '../../lib/financialCalculations'
 import type { PeriodOption } from '../../lib/periods'
-import type { RoomBreakdownEntry, IncomeBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
+import type { RoomBreakdownEntry, ExpenseBreakdownEntry } from '../../lib/lineItemBreakdown'
 import type { YearlyComparisonColumn } from '../../lib/dashboardData'
 import type { UpcomingLeaseExpiration, PortfolioUpcomingLeaseExpiration } from '../../lib/leaseTracking'
 import type { AnomalyFlag } from '@prisma/client'
@@ -101,10 +101,13 @@ function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
           {entries.map((entry) => {
             const { text, negative } = formatCell(entry.category === 'expense' ? -entry.amount : entry.amount)
             // Explain the unusual cases: extra rent collected (why more than expected came in),
-            // and any room-linked expense (these are never routine — a normal recurring cost
-            // like PM fee/utilities is building-wide, not per-room).
+            // any room-linked expense (these are never routine — a normal recurring cost like
+            // PM fee/utilities is building-wide, not per-room), and the "Rental Cycle"
+            // pseudo-room (it has no rent-roll snapshot to compute a status against, so the
+            // note is the only way to tell what it actually is).
             const showExplanation =
-              entry.notes.length > 0 && (entry.category === 'expense' || entry.status === 'additional')
+              entry.notes.length > 0 &&
+              (entry.category === 'expense' || entry.status === 'additional' || entry.room === 'Rental Cycle')
             return (
               <Fragment key={`${entry.room}-${entry.accountItem}-${entry.category}`}>
                 <tr>
@@ -125,45 +128,6 @@ function RoomBreakdownTable({ entries }: { entries: RoomBreakdownEntry[] }) {
               </Fragment>
             )
           })}
-        </tbody>
-      </table>
-    </>
-  )
-}
-
-function IncomeBreakdownTable({ entries }: { entries: IncomeBreakdownEntry[] }) {
-  if (entries.length === 0) return null
-
-  return (
-    <>
-      <h2 className={styles.sectionTitle}>Income by Category</h2>
-      <p className={styles.sectionHint}>
-        Building-wide income not tied to a specific room (e.g. a recurring bike-share fee) — shown here since it
-        wouldn&apos;t otherwise appear anywhere. ⚠ marks anything out of the ordinary.
-      </p>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Yen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <Fragment key={entry.accountItem}>
-              <tr className={entry.recurring ? undefined : styles.flaggedRow}>
-                <td>{entry.accountItem}</td>
-                <td>{formatYenCompact(entry.amount)}</td>
-              </tr>
-              {entry.notes.length > 0 && (
-                <tr>
-                  <td colSpan={2} className={styles.explanationRow}>
-                    {entry.notes.map(translateNote).join(' · ')}
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          ))}
         </tbody>
       </table>
     </>
@@ -333,6 +297,33 @@ function FlagsSection({ flags, onResolved }: { flags: AnomalyFlag[]; onResolved:
   )
 }
 
+const COMBINED_PROPERTY_ID = 'combined'
+
+function LoanBalanceSection({ loanBalance }: { loanBalance: { startingBalance: number; endingBalance: number } | null }) {
+  if (!loanBalance) return null
+
+  return (
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th>Loan Balance</th>
+          <th>Yen</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Starting Balance</td>
+          <td>{formatYenCompact(loanBalance.startingBalance)}</td>
+        </tr>
+        <tr>
+          <td>Ending Balance</td>
+          <td>{formatYenCompact(loanBalance.endingBalance)}</td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
 export function DashboardView(props: {
   properties: { id: string; name: string }[]
   selectedPropertyId: string
@@ -341,11 +332,11 @@ export function DashboardView(props: {
   view: DashboardViewMode
   dashboard: MonthlyFinancials & { flags: AnomalyFlag[] }
   roomBreakdown: RoomBreakdownEntry[]
-  incomeBreakdown: IncomeBreakdownEntry[]
   expenseBreakdown: ExpenseBreakdownEntry[]
   comparison: YearlyComparisonColumn[]
   upcomingLeaseExpirations: UpcomingLeaseExpiration[]
   portfolioLeaseExpirations: PortfolioUpcomingLeaseExpiration[]
+  loanBalance: { startingBalance: number; endingBalance: number } | null
 }) {
   const router = useRouter()
 
@@ -353,6 +344,7 @@ export function DashboardView(props: {
     router.push(`/dashboard?propertyId=${props.selectedPropertyId}&period=${e.target.value}&view=${props.view}`)
   }
 
+  const isCombined = props.selectedPropertyId === COMBINED_PROPERTY_ID
   const isOperations = props.view === 'operations'
   const isCompare = props.view === 'compare'
 
@@ -364,7 +356,11 @@ export function DashboardView(props: {
         {props.properties.map((property) => (
           <Link
             key={property.id}
-            href={`/dashboard?propertyId=${property.id}&period=${props.period}&view=${props.view}`}
+            href={
+              property.id === COMBINED_PROPERTY_ID
+                ? `/dashboard?propertyId=${property.id}&period=${props.period}&view=financials`
+                : `/dashboard?propertyId=${property.id}&period=${props.period}&view=${props.view}`
+            }
             className={property.id === props.selectedPropertyId ? `${styles.tab} ${styles.tabActive}` : styles.tab}
           >
             {property.name}
@@ -372,26 +368,31 @@ export function DashboardView(props: {
         ))}
       </nav>
 
-      <nav className={styles.tabs}>
-        <Link
-          href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=operations`}
-          className={isOperations ? `${styles.tab} ${styles.tabActive}` : styles.tab}
-        >
-          Operations
-        </Link>
-        <Link
-          href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=financials`}
-          className={!isOperations && !isCompare ? `${styles.tab} ${styles.tabActive}` : styles.tab}
-        >
-          Financials
-        </Link>
-        <Link
-          href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=compare`}
-          className={isCompare ? `${styles.tab} ${styles.tabActive}` : styles.tab}
-        >
-          Compare
-        </Link>
-      </nav>
+      {/* Combined only ever shows Financials — per-room breakdown, flags, and anomaly
+          detection are all inherently single-property concepts, so there's nothing for
+          Operations/Compare to show. */}
+      {!isCombined && (
+        <nav className={styles.tabs}>
+          <Link
+            href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=operations`}
+            className={isOperations ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+          >
+            Operations
+          </Link>
+          <Link
+            href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=financials`}
+            className={!isOperations && !isCompare ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+          >
+            Financials
+          </Link>
+          <Link
+            href={`/dashboard?propertyId=${props.selectedPropertyId}&period=${props.period}&view=compare`}
+            className={isCompare ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+          >
+            Compare
+          </Link>
+        </nav>
+      )}
 
       {!isCompare && (
         <div className={styles.periodRow}>
@@ -411,6 +412,8 @@ export function DashboardView(props: {
         <>
           <MetricsTable rows={isOperations ? OPERATIONS_METRIC_ROWS : FINANCIALS_METRIC_ROWS} dashboard={props.dashboard} />
 
+          {!isOperations && <LoanBalanceSection loanBalance={props.loanBalance} />}
+
           {isOperations && (
             <>
               <FlagsSection flags={props.dashboard.flags} onResolved={() => router.refresh()} />
@@ -418,7 +421,6 @@ export function DashboardView(props: {
               <LeaseExpirationsTable entries={props.upcomingLeaseExpirations} />
 
               <RoomBreakdownTable entries={props.roomBreakdown} />
-              <IncomeBreakdownTable entries={props.incomeBreakdown} />
               <ExpenseBreakdownTable entries={props.expenseBreakdown} />
             </>
           )}

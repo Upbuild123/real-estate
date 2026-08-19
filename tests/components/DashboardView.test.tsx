@@ -49,11 +49,11 @@ const DEFAULT_PROPS = {
   view: 'operations' as const,
   dashboard: SAMPLE_DASHBOARD,
   roomBreakdown: [],
-  incomeBreakdown: [],
   expenseBreakdown: [],
   comparison: [],
   upcomingLeaseExpirations: [],
   portfolioLeaseExpirations: [],
+  loanBalance: null,
 }
 
 describe('DashboardView — Operations view', () => {
@@ -211,22 +211,18 @@ describe('DashboardView — Operations view', () => {
     expect(screen.queryByText('By Room')).not.toBeInTheDocument()
   })
 
-  it('renders Income by Category with its explanation note, even for a recurring item', () => {
+  it('renders a "Rental Cycle" pseudo-room like any other room, including its status column being blank', () => {
     render(
       <DashboardView
         {...DEFAULT_PROPS}
-        incomeBreakdown={[{ accountItem: 'Miscellaneous income', amount: 3300, recurring: true, notes: ['rental cycle'] }]}
+        roomBreakdown={[
+          { room: 'Rental Cycle', accountItem: 'Rental Cycle', category: 'income', amount: 3300, notes: ['rental cycle'] },
+        ]}
       />
     )
 
-    expect(screen.getByText('Income by Category')).toBeInTheDocument()
-    expect(screen.getByText('Miscellaneous income')).toBeInTheDocument()
+    expect(screen.getAllByText('Rental Cycle')).toHaveLength(2) // Room column and Item column
     expect(screen.getByText('rental cycle')).toBeInTheDocument()
-  })
-
-  it('does not render the Income by Category section when there is no income breakdown data', () => {
-    render(<DashboardView {...DEFAULT_PROPS} incomeBreakdown={[]} />)
-    expect(screen.queryByText('Income by Category')).not.toBeInTheDocument()
   })
 
   it('renders the expense breakdown with normal categories unmarked', () => {
@@ -278,19 +274,34 @@ describe('DashboardView — Financials view', () => {
     expect(screen.getByText('(36K)')).toBeInTheDocument()
   })
 
-  it('does not render Flags, By Room, Income by Category, or Expenses by Category sections', () => {
+  it('renders starting and ending loan balance when present', () => {
+    render(
+      <DashboardView {...financialsProps} loanBalance={{ startingBalance: 105000000, endingBalance: 104539000 }} />
+    )
+
+    expect(screen.getByText('Loan Balance')).toBeInTheDocument()
+    expect(screen.getByText('Starting Balance')).toBeInTheDocument()
+    expect(screen.getByText('105.0M')).toBeInTheDocument()
+    expect(screen.getByText('Ending Balance')).toBeInTheDocument()
+    expect(screen.getByText('104.5M')).toBeInTheDocument()
+  })
+
+  it('does not render a loan balance section when there is no loan', () => {
+    render(<DashboardView {...financialsProps} loanBalance={null} />)
+    expect(screen.queryByText('Loan Balance')).not.toBeInTheDocument()
+  })
+
+  it('does not render Flags, By Room, or Expenses by Category sections', () => {
     render(
       <DashboardView
         {...financialsProps}
         roomBreakdown={[{ room: '101', accountItem: 'Rent', category: 'income', amount: 125000, notes: [] }]}
-        incomeBreakdown={[{ accountItem: 'Miscellaneous income', amount: 3300, recurring: true, notes: [] }]}
         expenseBreakdown={[{ accountItem: 'Property management fee', amount: 40000, recurring: true, notes: [] }]}
       />
     )
 
     expect(screen.queryByText('Flags')).not.toBeInTheDocument()
     expect(screen.queryByText('By Room')).not.toBeInTheDocument()
-    expect(screen.queryByText('Income by Category')).not.toBeInTheDocument()
     expect(screen.queryByText('Expenses by Category')).not.toBeInTheDocument()
   })
 })
@@ -337,6 +348,40 @@ describe('DashboardView — shared chrome', () => {
     expect(screen.getByText('Operations')).toBeInTheDocument()
     expect(screen.getByText('Financials')).toBeInTheDocument()
     expect(screen.getByText('Compare')).toBeInTheDocument()
+  })
+})
+
+describe('DashboardView — Combined property', () => {
+  const COMBINED_PROPS = {
+    ...DEFAULT_PROPS,
+    properties: [
+      { id: 'p1', name: 'Ide building' },
+      { id: 'p2', name: 'Residence DO5' },
+      { id: 'combined', name: 'Combined' },
+    ],
+    selectedPropertyId: 'combined',
+    view: 'financials' as const,
+  }
+
+  it('renders a Combined tab alongside the real properties', () => {
+    render(<DashboardView {...DEFAULT_PROPS} properties={COMBINED_PROPS.properties} />)
+    expect(screen.getByText('Combined')).toBeInTheDocument()
+  })
+
+  it('does not render the Operations/Financials/Compare tab bar when Combined is selected', () => {
+    render(<DashboardView {...COMBINED_PROPS} />)
+
+    expect(screen.queryByText('Operations')).not.toBeInTheDocument()
+    expect(screen.queryByText('Compare')).not.toBeInTheDocument()
+    // "Financials" only appears as a property-switcher-adjacent view tab, which is hidden for
+    // Combined — the financial data itself (e.g. "Income") still renders below.
+    expect(screen.queryByText('Financials')).not.toBeInTheDocument()
+    expect(screen.getByText('Income')).toBeInTheDocument()
+  })
+
+  it('still renders the period selector for Combined', () => {
+    render(<DashboardView {...COMBINED_PROPS} />)
+    expect(screen.getByText('2026 YTD')).toBeInTheDocument()
   })
 })
 

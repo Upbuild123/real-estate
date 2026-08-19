@@ -90,6 +90,18 @@ export async function getLatestMonthWithData(propertyId: string): Promise<string
   return record?.month ?? null
 }
 
+// Earliest/latest month with any FinancialRecord across every property, not just one — used
+// to bound the period selector and YTD math for the "Combined" portfolio option.
+export async function getPortfolioEarliestMonthWithData(): Promise<string | null> {
+  const record = await db.financialRecord.findFirst({ orderBy: { month: 'asc' }, select: { month: true } })
+  return record?.month ?? null
+}
+
+export async function getPortfolioLatestMonthWithData(): Promise<string | null> {
+  const record = await db.financialRecord.findFirst({ orderBy: { month: 'desc' }, select: { month: true } })
+  return record?.month ?? null
+}
+
 export interface YearlyComparisonColumn {
   year: number
   label: string
@@ -125,6 +137,22 @@ export async function getYearlyComparisonDashboard(
   }
 
   return columns
+}
+
+// Combined MonthlyFinancials across every active property for the given months — used for the
+// "Combined" portfolio option, which only shows the Financials view (no per-property flags,
+// room/expense breakdown, or anomaly detection makes sense once multiple properties are
+// summed together).
+export async function getPortfolioRangeDashboard(months: string[]): Promise<MonthlyFinancials> {
+  const properties = await listProperties()
+  let total = { ...ZERO_FINANCIALS }
+  for (const property of properties) {
+    for (const month of months) {
+      const financials = await getMonthlyFinancials(property.id, month)
+      total = sumFinancials(total, financials)
+    }
+  }
+  return total
 }
 
 export async function getPortfolioDashboard(

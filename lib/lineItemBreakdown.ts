@@ -31,10 +31,24 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
 
   for (const record of records) {
     const note = record.note as string
-    const room = extractRoomTokenFromKnown(note, knownTokens) ?? extractRoomToken(note)
-    if (!room) continue
+    let room = extractRoomTokenFromKnown(note, knownTokens) ?? extractRoomToken(note)
+    let accountItem = record.accountItem
 
-    const key = `${room}|${record.accountItem}|${record.category}`
+    // Recurring bike-share income (D05) has no per-unit note to match a room from, and the PM
+    // files it inconsistently — "Miscellaneous income", "Other Income", "Lease", even "Other
+    // fixed expense" depending on the month — so treat it as its own pseudo-room, the same way
+    // a parking space gets its own row, rather than letting it disappear (it's excluded from
+    // every other breakdown: no room to attribute it to, and it's income, not an expense).
+    if (!room) {
+      if (/rental cycle|share cycle/i.test(note)) {
+        room = 'Rental Cycle'
+        accountItem = 'Rental Cycle'
+      } else {
+        continue
+      }
+    }
+
+    const key = `${room}|${accountItem}|${record.category}`
     const existing = grouped.get(key)
     if (existing) {
       existing.amount += record.amount
@@ -42,7 +56,7 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
     } else {
       grouped.set(key, {
         room,
-        accountItem: record.accountItem,
+        accountItem,
         category: record.category as 'income' | 'expense',
         amount: record.amount,
         notes: [note],
@@ -129,53 +143,6 @@ export async function getRoomBreakdown(propertyId: string, months: string[]): Pr
     if (orderA === undefined && orderB !== undefined) return 1
     return a.room.localeCompare(b.room) || b.amount - a.amount
   })
-}
-
-export interface IncomeBreakdownEntry {
-  accountItem: string
-  amount: number
-  recurring: boolean
-  notes: string[]
-}
-
-// Groups building-wide income line items (no per-unit note, or a note that doesn't match any
-// known room/parking-space label) by accountItem, summed across the given months. This is what
-// surfaces recurring-but-not-room-linked income like a monthly bike-share/rental-cycle fee —
-// without it, that income is invisible everywhere: it's excluded from the Room breakdown (no
-// room to attribute it to) and from Expenses by Category (that table is expense-only), so it
-// only ever shows up folded into the overall Income total with nothing explaining what it was.
-export async function getIncomeBreakdown(propertyId: string, months: string[]): Promise<IncomeBreakdownEntry[]> {
-  const [records, allRentRoll] = await Promise.all([
-    db.financialRecord.findMany({ where: { propertyId, month: { in: months }, category: 'income' } }),
-    db.rentRollEntry.findMany({ where: { propertyId }, select: { roomNumber: true } }),
-  ])
-
-  const knownTokens = Array.from(new Set(allRentRoll.map((r) => r.roomNumber)))
-
-  const grouped = new Map<string, IncomeBreakdownEntry>()
-
-  for (const record of records) {
-    const note = record.note ?? ''
-    if (note) {
-      const room = extractRoomTokenFromKnown(note, knownTokens) ?? extractRoomToken(note)
-      if (room) continue // already attributed to a room in getRoomBreakdown
-    }
-
-    const existing = grouped.get(record.accountItem)
-    if (existing) {
-      existing.amount += record.amount
-      if (note && !existing.notes.includes(note)) existing.notes.push(note)
-    } else {
-      grouped.set(record.accountItem, {
-        accountItem: record.accountItem,
-        amount: record.amount,
-        recurring: record.recurring,
-        notes: note ? [note] : [],
-      })
-    }
-  }
-
-  return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount)
 }
 
 export interface ExpenseBreakdownEntry {

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { db } from '../lib/db'
 import { createProperty } from '../lib/properties'
-import { getRoomBreakdown, getExpenseBreakdown, getIncomeBreakdown } from '../lib/lineItemBreakdown'
+import { getRoomBreakdown, getExpenseBreakdown } from '../lib/lineItemBreakdown'
 
 describe('getRoomBreakdown', () => {
   it('groups income and expense line items by room, summing across the given months', async () => {
@@ -194,6 +194,40 @@ describe('getRoomBreakdown', () => {
     await db.rentRollEntry.deleteMany({ where: { propertyId: property.id } })
     await db.property.delete({ where: { id: property.id } })
   })
+
+  it('groups recurring bike-share income (no room note) under a "Rental Cycle" pseudo-room, regardless of which inconsistent accountItem the PM filed it under', async () => {
+    const property = await createProperty({ name: 'Room Breakdown Rental Cycle Test', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: property.id, month: '2026-06', category: 'income', accountItem: 'Miscellaneous income', amount: 3300, recurring: true, lineItemKey: 'rb-rc1', source: 'extracted', note: 'Rental cycle' },
+        { propertyId: property.id, month: '2026-07', category: 'income', accountItem: 'Other Income', amount: 3300, recurring: true, lineItemKey: 'rb-rc2', source: 'extracted', note: 'rental cycle' },
+      ],
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-06', '2026-07'])
+    const rentalCycle = result.find((r) => r.room === 'Rental Cycle')
+
+    expect(rentalCycle).toMatchObject({ room: 'Rental Cycle', accountItem: 'Rental Cycle', category: 'income', amount: 6600 })
+    expect(rentalCycle?.notes).toEqual(['Rental cycle', 'rental cycle'])
+    expect(rentalCycle?.status).toBeUndefined()
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
+
+  it('does not treat an unrelated building-wide income note as a room', async () => {
+    const property = await createProperty({ name: 'Room Breakdown No Match Test', address: 'x' })
+    await db.financialRecord.create({
+      data: { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Other Income', amount: 50000, recurring: false, lineItemKey: 'rb-nm1', source: 'extracted', note: 'Insurance payout for water damage' },
+    })
+
+    const result = await getRoomBreakdown(property.id, ['2026-01'])
+
+    expect(result).toEqual([])
+
+    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
+    await db.property.delete({ where: { id: property.id } })
+  })
 })
 
 describe('getExpenseBreakdown', () => {
@@ -260,55 +294,5 @@ describe('getExpenseBreakdown', () => {
 
   afterAll(async () => {
     await db.$disconnect()
-  })
-})
-
-describe('getIncomeBreakdown', () => {
-  it('surfaces recurring building-wide income with no room note (e.g. a bike-share fee) that Room breakdown and Expenses by Category both exclude', async () => {
-    const property = await createProperty({ name: 'Income Breakdown Test', address: 'x' })
-    await db.financialRecord.createMany({
-      data: [
-        { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Miscellaneous income', amount: 3300, recurring: true, lineItemKey: 'ib-1', source: 'extracted', note: 'rental cycle' },
-        { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Miscellaneous income', amount: 3300, recurring: true, lineItemKey: 'ib-2', source: 'extracted', note: 'Rental cycle' },
-      ],
-    })
-
-    const result = await getIncomeBreakdown(property.id, ['2026-01', '2026-02'])
-    const misc = result.find((r) => r.accountItem === 'Miscellaneous income')
-
-    expect(misc?.amount).toBe(6600)
-    expect(misc?.recurring).toBe(true)
-    expect(misc?.notes).toEqual(['rental cycle', 'Rental cycle'])
-
-    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
-    await db.property.delete({ where: { id: property.id } })
-  })
-
-  it('excludes income already attributable to a room (that belongs in getRoomBreakdown, not here)', async () => {
-    const property = await createProperty({ name: 'Income Breakdown Room Exclusion Test', address: 'x' })
-    await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 125000, recurring: true, lineItemKey: 'ib-3', source: 'extracted', note: '101-Tenant A 2026-01分Rent' },
-    })
-
-    const result = await getIncomeBreakdown(property.id, ['2026-01'])
-
-    expect(result.some((r) => r.accountItem === 'Rent')).toBe(false)
-
-    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
-    await db.property.delete({ where: { id: property.id } })
-  })
-
-  it('excludes expense line items', async () => {
-    const property = await createProperty({ name: 'Income Breakdown Expense Exclusion Test', address: 'x' })
-    await db.financialRecord.create({
-      data: { propertyId: property.id, month: '2026-01', category: 'expense', accountItem: 'Property management fee', amount: 40000, recurring: true, lineItemKey: 'ib-4', source: 'extracted' },
-    })
-
-    const result = await getIncomeBreakdown(property.id, ['2026-01'])
-
-    expect(result).toEqual([])
-
-    await db.financialRecord.deleteMany({ where: { propertyId: property.id } })
-    await db.property.delete({ where: { id: property.id } })
   })
 })

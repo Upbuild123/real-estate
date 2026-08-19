@@ -5,6 +5,9 @@ import {
   getPropertyMonthlyDashboard,
   getPropertyYtdDashboard,
   getPortfolioDashboard,
+  getPortfolioRangeDashboard,
+  getPortfolioEarliestMonthWithData,
+  getPortfolioLatestMonthWithData,
   getPropertyRangeDashboard,
   getEarliestMonthWithData,
   getLatestMonthWithData,
@@ -101,6 +104,45 @@ describe('dashboardData', () => {
     expect(propertyAEntry?.financials.income).toBe(100000)
     expect(propertyBEntry?.financials.income).toBe(200000)
     expect(result.income).toBeGreaterThanOrEqual(300000)
+  })
+
+  it('returns the earliest/latest month with data across every property, not just one', async () => {
+    const propertyA = await createProperty({ name: 'Portfolio Bounds A', address: 'x' })
+    const propertyB = await createProperty({ name: 'Portfolio Bounds B', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: propertyA.id, month: '2019-03', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'test-key-pb1', source: 'extracted' },
+        { propertyId: propertyB.id, month: '2027-11', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'test-key-pb2', source: 'extracted' },
+      ],
+    })
+
+    expect(await getPortfolioEarliestMonthWithData()).toBe('2019-03')
+    expect(await getPortfolioLatestMonthWithData()).toBe('2027-11')
+
+    await db.financialRecord.deleteMany({ where: { propertyId: { in: [propertyA.id, propertyB.id] } } })
+    await db.property.deleteMany({ where: { id: { in: [propertyA.id, propertyB.id] } } })
+  })
+
+  it('sums financials across all active properties and an arbitrary list of months (getPortfolioRangeDashboard)', async () => {
+    const propertyA = await createProperty({ name: 'Portfolio Range A', address: 'x' })
+    const propertyB = await createProperty({ name: 'Portfolio Range B', address: 'x' })
+    await db.financialRecord.createMany({
+      data: [
+        { propertyId: propertyA.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 100000, recurring: true, lineItemKey: 'test-key-pr1', source: 'extracted' },
+        { propertyId: propertyA.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 110000, recurring: true, lineItemKey: 'test-key-pr2', source: 'extracted' },
+        { propertyId: propertyB.id, month: '2026-01', category: 'income', accountItem: 'Rent', amount: 200000, recurring: true, lineItemKey: 'test-key-pr3', source: 'extracted' },
+        { propertyId: propertyB.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 999999, recurring: true, lineItemKey: 'test-key-pr4', source: 'extracted' }, // excluded, not in requested range
+      ],
+    })
+
+    const result = await getPortfolioRangeDashboard(['2026-01'])
+
+    // Sums across ALL active properties in the DB, so assert a lower bound rather than an
+    // exact total — consistent with the existing getPortfolioDashboard test's approach.
+    expect(result.income).toBeGreaterThanOrEqual(300000)
+
+    await db.financialRecord.deleteMany({ where: { propertyId: { in: [propertyA.id, propertyB.id] } } })
+    await db.property.deleteMany({ where: { id: { in: [propertyA.id, propertyB.id] } } })
   })
 
   it('sums financials across an arbitrary list of months (getPropertyRangeDashboard)', async () => {
