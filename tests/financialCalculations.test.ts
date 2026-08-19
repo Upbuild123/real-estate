@@ -54,7 +54,10 @@ describe('getMonthlyFinancials', () => {
     expect(result.afterTaxCashFlow).toBeCloseTo(expectedPreTaxCashFlow - result.incomeTaxOwed, 1)
   })
 
-  it('floors taxable income at 0 when expenses and debt service exceed income', async () => {
+  it('allows taxable income and income tax owed to go negative when expenses and debt service exceed income', async () => {
+    // Not floored at 0: a monthly loss must be able to offset gain months when summed into a
+    // YTD/full-year total (via sumFinancials in lib/dashboardData.ts) — flooring here would
+    // understate the aggregated loss and overstate the aggregated tax owed.
     const property = await createProperty({ name: 'Loss Test', address: 'x' })
     await db.financialRecord.create({
       data: { propertyId: property.id, month: '2026-02', category: 'income', accountItem: 'Rent', amount: 1000, recurring: true, lineItemKey: 'test-key-4', source: 'extracted' },
@@ -69,9 +72,14 @@ describe('getMonthlyFinancials', () => {
       originationDate: new Date('2025-01-01'),
       maturityDate: new Date('2045-01-01'),
     })
+    await setSetting('marginalTaxRate', '0.43')
     const result = await getMonthlyFinancials(property.id, '2026-02')
-    expect(result.taxableIncome).toBe(0)
-    expect(result.incomeTaxOwed).toBe(0)
+    const expectedInterest = (100000000 * (2 / 100)) / 12
+    const expectedTaxableIncome = 1000 - expectedInterest
+    expect(result.taxableIncome).toBeCloseTo(expectedTaxableIncome, 1)
+    expect(result.taxableIncome).toBeLessThan(0)
+    expect(result.incomeTaxOwed).toBeCloseTo(expectedTaxableIncome * 0.43, 1)
+    expect(result.incomeTaxOwed).toBeLessThan(0)
   })
 
   it('handles a property with no loan (interest, principal, and debt service all zero)', async () => {

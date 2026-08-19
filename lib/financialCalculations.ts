@@ -38,8 +38,10 @@ export async function getMonthlyFinancials(propertyId: string, month: string): P
 
   // Depreciation reduces taxable income (it's a real deductible expense for tax purposes)
   // but is never a cash outflow, so it must never appear in preTaxCashFlow/afterTaxCashFlow below.
-  const rawTaxableIncome = noi - interestExpense - amortizedTax - amortizedInsurance - amortizedDepreciation
-  const taxableIncome = Math.max(rawTaxableIncome, 0)
+  // Not floored at 0: a loss month is real and must offset gain months when these figures are
+  // summed for a YTD/full-year total — flooring here would understate an aggregated loss.
+  // incomeTaxOwed follows suit and can go negative, representing a tax benefit from the loss.
+  const taxableIncome = noi - interestExpense - amortizedTax - amortizedInsurance - amortizedDepreciation
 
   const marginalRate = await getMarginalTaxRate()
   const incomeTaxOwed = taxableIncome * marginalRate
