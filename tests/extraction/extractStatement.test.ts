@@ -5,11 +5,16 @@ import fixture from '../fixtures/statement-ide-jan2026.json'
 
 vi.mock('../../lib/claudeClient', () => ({
   extractStructuredDataFromPdf: vi.fn().mockResolvedValue(fixture),
+  extractStructuredDataFromText: vi.fn().mockResolvedValue(fixture),
   ExtractionParseError: class ExtractionParseError extends Error {},
 }))
 
+vi.mock('../../lib/xlsxParser', () => ({
+  xlsxToText: vi.fn().mockResolvedValue('fake sheet text'),
+}))
+
 import { ingestStatement } from '../../lib/extraction/extractStatement'
-import { extractStructuredDataFromPdf, ExtractionParseError } from '../../lib/claudeClient'
+import { extractStructuredDataFromPdf, extractStructuredDataFromText, ExtractionParseError } from '../../lib/claudeClient'
 
 describe('ingestStatement', () => {
   it('creates FinancialRecord rows from extracted line items, tagging recurring correctly', async () => {
@@ -39,6 +44,33 @@ describe('ingestStatement', () => {
     expect(records.every((r) => r.month === '2026-01')).toBe(true)
     expect(records.every((r) => r.source === 'extracted')).toBe(true)
     expect(records.find((r) => r.accountItem === 'Rent')?.note).toBe('101-ZHU JIAOJIAO 2026-02分Rent')
+  })
+
+  it('ingests an xlsx statement via extractStructuredDataFromText, converting the file to text first', async () => {
+    const property = await createProperty({ name: 'Ide Extract Xlsx Test', address: 'x' })
+    const dropboxFile = await db.dropboxFile.create({
+      data: {
+        propertyId: property.id,
+        dropboxFileId: 'dbx-statement-xlsx',
+        filename: '457917_2026-08_report.xlsx',
+        uploadedAt: new Date(),
+        fileType: 'statement',
+        storageUrl: 'https://blob.example.com/x.xlsx',
+      },
+    })
+
+    const result = await ingestStatement({
+      dropboxFileId: dropboxFile.id,
+      propertyId: property.id,
+      xlsxBase64: 'ZmFrZS14bHN4',
+    })
+
+    expect(result.status).toBe('success')
+    expect(extractStructuredDataFromText).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'fake sheet text' })
+    )
+    const records = await db.financialRecord.findMany({ where: { propertyId: property.id } })
+    expect(records.length).toBeGreaterThan(0)
   })
 
   it('creates RentRollEntry rows from the extracted rent roll', async () => {
@@ -278,6 +310,7 @@ describe('ingestStatement', () => {
             'Ide Extract Double Fail Test',
             'Ide Extract Rent Roll Test',
             'Ide Extract Rent Roll Reingest Test',
+            'Ide Extract Xlsx Test',
           ],
         },
       },

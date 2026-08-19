@@ -1,5 +1,5 @@
 import { db } from './db'
-import { listPdfFiles, downloadFile } from './dropboxClient'
+import { listStatementFiles, downloadFile } from './dropboxClient'
 import { uploadToStorage } from './blobStorage'
 import { ingestStatement } from './extraction/extractStatement'
 import { ingestLoanDocument } from './extraction/extractLoan'
@@ -23,7 +23,7 @@ export async function syncDropboxFolder(property: {
   id: string
   dropboxFolderPath: string
 }): Promise<{ newFiles: number; skipped: number; failed: number }> {
-  const files = await listPdfFiles(property.dropboxFolderPath)
+  const files = await listStatementFiles(property.dropboxFolderPath)
   let newFiles = 0
   let skipped = 0
   let failed = 0
@@ -58,15 +58,16 @@ export async function syncDropboxFolder(property: {
 
     if (!existing) newFiles++
 
-    const pdfBase64 = buffer.toString('base64')
+    const fileBase64 = buffer.toString('base64')
+    const isXlsx = file.name.toLowerCase().endsWith('.xlsx')
 
     try {
       if (fileType === 'statement') {
-        const result = await ingestStatement({
-          dropboxFileId: dropboxFile.id,
-          propertyId: property.id,
-          pdfBase64,
-        })
+        const result = await ingestStatement(
+          isXlsx
+            ? { dropboxFileId: dropboxFile.id, propertyId: property.id, xlsxBase64: fileBase64 }
+            : { dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: fileBase64 }
+        )
         if (result.status === 'success') {
           await runAnomalyRules(property.id, result.activityMonth)
         }
@@ -74,7 +75,7 @@ export async function syncDropboxFolder(property: {
         await ingestLoanDocument({
           dropboxFileId: dropboxFile.id,
           propertyId: property.id,
-          pdfBase64,
+          pdfBase64: fileBase64,
         })
       }
     } catch (err) {

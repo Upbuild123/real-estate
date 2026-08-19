@@ -12,7 +12,7 @@ export async function extractStructuredDataFromPdf<T>(params: {
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 8192,
-    system: `${params.systemPrompt}\n\nRespond with ONLY valid JSON matching this shape, no prose, no markdown fences:\n${params.schemaDescription}`,
+    system: buildSystemPrompt(params.systemPrompt, params.schemaDescription),
     messages: [
       {
         role: 'user',
@@ -27,6 +27,39 @@ export async function extractStructuredDataFromPdf<T>(params: {
     ],
   })
 
+  return parseModelResponse<T>(response)
+}
+
+// For source documents that are already text (e.g. a spreadsheet dumped to a row-by-row text
+// representation) — same schema/prompt contract as the PDF path, just a plain-text user turn
+// instead of a document content block.
+export async function extractStructuredDataFromText<T>(params: {
+  text: string
+  systemPrompt: string
+  schemaDescription: string
+}): Promise<T> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 8192,
+    system: buildSystemPrompt(params.systemPrompt, params.schemaDescription),
+    messages: [
+      {
+        role: 'user',
+        content: `Extract the data as specified from this spreadsheet content:\n\n${params.text}`,
+      },
+    ],
+  })
+
+  return parseModelResponse<T>(response)
+}
+
+function buildSystemPrompt(systemPrompt: string, schemaDescription: string): string {
+  return `${systemPrompt}\n\nRespond with ONLY valid JSON matching this shape, no prose, no markdown fences:\n${schemaDescription}`
+}
+
+function parseModelResponse<T>(response: Anthropic.Message): T {
   const textBlock = response.content.find((block: any) => block.type === 'text')
   const text = (textBlock as any)?.text ?? ''
 

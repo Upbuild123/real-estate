@@ -4,7 +4,7 @@ import { db } from '../lib/db'
 import { createProperty } from '../lib/properties'
 
 vi.mock('../lib/dropboxClient', () => ({
-  listPdfFiles: vi.fn().mockResolvedValue([
+  listStatementFiles: vi.fn().mockResolvedValue([
     { id: 'dbx1', name: '429878_2026-02_report.pdf', pathLower: '/ide/429878_2026-02_report.pdf', serverModified: new Date('2026-02-15') },
   ]),
   downloadFile: vi.fn().mockResolvedValue(Buffer.from('pdf-bytes')),
@@ -32,7 +32,7 @@ vi.mock('../lib/anomalyRules', () => ({
 }))
 
 import { syncDropboxFolder } from '../lib/dropboxSync'
-import { listPdfFiles } from '../lib/dropboxClient'
+import { listStatementFiles } from '../lib/dropboxClient'
 import { ingestStatement } from '../lib/extraction/extractStatement'
 import { ingestLoanDocument } from '../lib/extraction/extractLoan'
 import { runAnomalyRules } from '../lib/anomalyRules'
@@ -46,6 +46,22 @@ describe('syncDropboxFolder', () => {
     const stored = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx1' } })
     expect(stored?.filename).toBe('429878_2026-02_report.pdf')
     expect(stored?.fileType).toBe('statement')
+  })
+
+  it('passes an xlsx statement to ingestStatement as xlsxBase64 rather than pdfBase64', async () => {
+    vi.mocked(listStatementFiles).mockResolvedValueOnce([
+      { id: 'dbx-xlsx-1', name: '457917_2026-08_report.xlsx', pathLower: '/ide/457917_2026-08_report.xlsx', serverModified: new Date('2026-08-14') },
+    ])
+    vi.mocked(ingestStatement).mockClear()
+
+    const property = await createProperty({ name: 'Ide Sync Xlsx Test', address: 'x' })
+    await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+
+    expect(ingestStatement).toHaveBeenCalledWith(
+      expect.objectContaining({ xlsxBase64: expect.any(String) })
+    )
+    const call = vi.mocked(ingestStatement).mock.calls[0][0]
+    expect('pdfBase64' in call).toBe(false)
   })
 
   it('skips a file already ingested with a successful extraction (dedupe by dropboxFileId)', async () => {
@@ -140,7 +156,7 @@ describe('syncDropboxFolder', () => {
   })
 
   it('triggers ingestLoanDocument (and not ingestStatement) for a new loan file', async () => {
-    vi.mocked(listPdfFiles).mockResolvedValueOnce([
+    vi.mocked(listStatementFiles).mockResolvedValueOnce([
       { id: 'dbx-loan-1', name: 'loan-schedule.pdf', pathLower: '/ide/loan-schedule.pdf', serverModified: new Date('2026-02-15') },
     ])
     const property = await createProperty({ name: 'Ide Sync Test 4', address: 'x' })
@@ -163,7 +179,7 @@ describe('syncDropboxFolder', () => {
   })
 
   it('continues processing subsequent files when one ingestion fails', async () => {
-    vi.mocked(listPdfFiles).mockResolvedValueOnce([
+    vi.mocked(listStatementFiles).mockResolvedValueOnce([
       { id: 'dbx-fail-1', name: 'fail_report.pdf', pathLower: '/ide/fail_report.pdf', serverModified: new Date('2026-02-15') },
       { id: 'dbx-fail-2', name: 'ok_report.pdf', pathLower: '/ide/ok_report.pdf', serverModified: new Date('2026-02-16') },
     ])

@@ -1,5 +1,6 @@
 import { db } from '../db'
-import { extractStructuredDataFromPdf, ExtractionParseError } from '../claudeClient'
+import { extractStructuredDataFromPdf, extractStructuredDataFromText, ExtractionParseError } from '../claudeClient'
+import { xlsxToText } from '../xlsxParser'
 import {
   isRecurringAccountItem,
   STATEMENT_SCHEMA_DESCRIPTION,
@@ -7,7 +8,9 @@ import {
   type StatementLineItem,
 } from './statementSchema'
 
-const STATEMENT_SYSTEM_PROMPT = `You are extracting structured financial data from a Japanese property management monthly statement PDF (issued by Axios Management Inc.). The document has a summary/rent-roll page and an itemized income/expense ledger. Extract every rent roll row and every line item from the ledger.`
+const STATEMENT_SYSTEM_PROMPT_PDF = `You are extracting structured financial data from a Japanese property management monthly statement PDF (issued by Axios Management Inc.). The document has a summary/rent-roll page and an itemized income/expense ledger. Extract every rent roll row and every line item from the ledger.`
+
+const STATEMENT_SYSTEM_PROMPT_XLSX = `You are extracting structured financial data from a Japanese property management monthly statement, provided as a row-by-row text dump of an Excel workbook (issued by Axios Management Inc.). It has a summary/rent-roll sheet and an itemized income/expense ledger sheet. Rows are pipe-separated cell values; merged-cell duplication has already been collapsed. On the ledger sheet, the "Account Item" column reads as the covered month (e.g. "Aug-2026") for Rent rows instead of an item name — for those rows use "Rent" as the accountItem, not the month text. Extract every rent roll row and every line item from the ledger.`
 
 // Line items don't have a stable ID from the source PDF, and multiple items can share the
 // same accountItem (one "Rent" row per rental unit). This key lets a manual correction on
@@ -17,11 +20,12 @@ function computeLineItemKey(item: Pick<StatementLineItem, 'accountItem' | 'settl
   return `${item.accountItem}|${item.settlementDate}|${item.note}`
 }
 
-export async function ingestStatement(params: {
-  dropboxFileId: string
-  propertyId: string
-  pdfBase64: string
-}): Promise<
+export async function ingestStatement(
+  params: {
+    dropboxFileId: string
+    propertyId: string
+  } & ({ pdfBase64: string } | { xlsxBase64: string })
+): Promise<
   | { status: 'success'; extractionId: string; recordsCreated: number; activityMonth: string }
   | { status: 'failed'; extractionId: string; error: string }
 > {
@@ -29,11 +33,18 @@ export async function ingestStatement(params: {
   let rawOutput = ''
 
   try {
-    extracted = await extractStructuredDataFromPdf<StatementExtraction>({
-      pdfBase64: params.pdfBase64,
-      systemPrompt: STATEMENT_SYSTEM_PROMPT,
-      schemaDescription: STATEMENT_SCHEMA_DESCRIPTION,
-    })
+    extracted =
+      'pdfBase64' in params
+        ? await extractStructuredDataFromPdf<StatementExtraction>({
+            pdfBase64: params.pdfBase64,
+            systemPrompt: STATEMENT_SYSTEM_PROMPT_PDF,
+            schemaDescription: STATEMENT_SCHEMA_DESCRIPTION,
+          })
+        : await extractStructuredDataFromText<StatementExtraction>({
+            text: await xlsxToText(Buffer.from(params.xlsxBase64, 'base64')),
+            systemPrompt: STATEMENT_SYSTEM_PROMPT_XLSX,
+            schemaDescription: STATEMENT_SCHEMA_DESCRIPTION,
+          })
     rawOutput = JSON.stringify(extracted)
   } catch (err) {
     const message = err instanceof ExtractionParseError ? err.message : String(err)
