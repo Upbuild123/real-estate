@@ -14,12 +14,12 @@ model Property {
   id                 String         @id @default(cuid())
   name               String
   address            String
-  dropboxFolderPath  String?
+  googleDriveFolderId String?
   active             Boolean        @default(true)
   createdAt      DateTime       @default(now())
   loans          Loan[]
   annualCosts    AnnualCost[]
-  dropboxFiles   DropboxFile[]
+  sourceFiles    SourceFile[]
   financialRecords FinancialRecord[]
   anomalyFlags   AnomalyFlag[]
   rentRollEntries RentRollEntry[]
@@ -58,11 +58,11 @@ model Setting {
   value String
 }
 
-model DropboxFile {
+model SourceFile {
   id             String   @id @default(cuid())
   propertyId     String
   property       Property @relation(fields: [propertyId], references: [id])
-  dropboxFileId  String   @unique
+  driveFileId    String   @unique
   filename       String
   uploadedAt     DateTime
   fileType       String   // "statement" | "loan"
@@ -72,8 +72,8 @@ model DropboxFile {
 
 model Extraction {
   id             String      @id @default(cuid())
-  dropboxFileId  String      @unique
-  dropboxFile    DropboxFile @relation(fields: [dropboxFileId], references: [id])
+  sourceFileId   String      @unique
+  sourceFile     SourceFile  @relation(fields: [sourceFileId], references: [id])
   rawModelOutput String
   status         String      // "success" | "failed"
   extractedAt    DateTime    @default(now())
