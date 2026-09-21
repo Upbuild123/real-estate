@@ -15,7 +15,7 @@ describe('ingestLoanDocument', () => {
   it('creates a Loan record from extracted data, using the first schedule row as current balance', async () => {
     const property = await createProperty({ name: 'DO5 Loan Extract Test', address: 'x' })
 
-    const result = await ingestLoanDocument({ dropboxFileId: null, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    const result = await ingestLoanDocument({ sourceFileId: null, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
 
     expect(result.status).toBe('success')
     const loan = await getLoanForProperty(property.id)
@@ -27,13 +27,13 @@ describe('ingestLoanDocument', () => {
     expect(loan?.newRate).toBe(2.075)
   })
 
-  it('does not create a duplicate Loan when the same dropboxFileId is re-processed', async () => {
+  it('does not create a duplicate Loan when the same sourceFileId is re-processed', async () => {
     const property = await createProperty({ name: 'DO5 Loan Dedupe Test', address: 'x' })
 
-    const first = await ingestLoanDocument({ dropboxFileId: 'dbx-loan-dedupe-1', propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    const first = await ingestLoanDocument({ sourceFileId: 'dbx-loan-dedupe-1', propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
     expect(first.status).toBe('success')
 
-    const second = await ingestLoanDocument({ dropboxFileId: 'dbx-loan-dedupe-1', propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    const second = await ingestLoanDocument({ sourceFileId: 'dbx-loan-dedupe-1', propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
     expect(second.status).toBe('success')
 
     const loans = await db.loan.findMany({ where: { propertyId: property.id } })
