@@ -24,9 +24,8 @@ function buildSignedJwt(email: string, privateKey: string): string {
 }
 
 // Google's service-account tokens are short-lived (1 hour) with no unattended way to extend
-// them, so — same approach as the prior Dropbox integration — mint a fresh access token from
-// the service account credentials before every Drive API call rather than caching one across
-// serverless invocations.
+// them, so mint a fresh access token from the service account credentials before every Drive
+// API call rather than caching one across serverless invocations.
 export async function getAccessToken(): Promise<string> {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY

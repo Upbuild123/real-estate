@@ -8,8 +8,8 @@ function formatMonthLabel(month: string): string {
   return `${MONTH_NAMES[Number(mo) - 1]} ${year}`
 }
 
-// Sent via a direct call to Resend's HTTP API — same reasoning as the Dropbox content
-// download: avoid depending on an SDK's own runtime-environment assumptions in a serverless
+// Sent via a direct call to Resend's HTTP API — same reasoning as the Drive content API
+// call: avoid depending on an SDK's own runtime-environment assumptions in a serverless
 // function, when a plain fetch does the job in one call.
 export async function sendStatementsReadyEmail(params: {
   to: string
