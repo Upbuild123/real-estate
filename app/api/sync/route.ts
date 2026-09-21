@@ -1,8 +1,8 @@
-import { syncDropboxFolder } from '../../../lib/dropboxSync'
+import { syncDriveFolder } from '../../../lib/driveSync'
 import { getProperty } from '../../../lib/properties'
 
 // Syncing a folder with several new statements means several sequential Claude extraction
-// calls plus Dropbox downloads — this can comfortably exceed the default serverless timeout.
+// calls plus Google Drive downloads — this can comfortably exceed the default serverless timeout.
 // Capped to whatever the actual Vercel plan allows; safe to request more than the plan grants.
 export const maxDuration = 300
 
@@ -26,18 +26,18 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Property not found' }, { status: 404 })
   }
 
-  if (!property.dropboxFolderPath) {
+  if (!property.googleDriveFolderId) {
     return Response.json(
-      { error: 'This property has no dropboxFolderPath configured. Set one via /admin before syncing.' },
+      { error: 'This property has no googleDriveFolderId configured. Set one via /admin before syncing.' },
       { status: 400 }
     )
   }
 
   try {
-    const result = await syncDropboxFolder({ id: propertyId, dropboxFolderPath: property.dropboxFolderPath })
+    const result = await syncDriveFolder({ id: propertyId, googleDriveFolderId: property.googleDriveFolderId })
     return Response.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to sync Dropbox folder'
+    const message = err instanceof Error ? err.message : 'Failed to sync Google Drive folder'
     return Response.json({ error: message }, { status: 500 })
   }
 }

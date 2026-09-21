@@ -22,7 +22,7 @@ function computeLineItemKey(item: Pick<StatementLineItem, 'accountItem' | 'settl
 
 export async function ingestStatement(
   params: {
-    dropboxFileId: string
+    sourceFileId: string
     propertyId: string
   } & ({ pdfBase64: string } | { xlsxBase64: string })
 ): Promise<
@@ -49,14 +49,14 @@ export async function ingestStatement(
   } catch (err) {
     const message = err instanceof ExtractionParseError ? err.message : String(err)
     const extraction = await db.extraction.upsert({
-      where: { dropboxFileId: params.dropboxFileId },
+      where: { sourceFileId: params.sourceFileId },
       update: { rawModelOutput: message, status: 'failed', extractedAt: new Date() },
-      create: { dropboxFileId: params.dropboxFileId, rawModelOutput: message, status: 'failed' },
+      create: { sourceFileId: params.sourceFileId, rawModelOutput: message, status: 'failed' },
     })
     return { status: 'failed', extractionId: extraction.id, error: message }
   }
 
-  const existingExtraction = await db.extraction.findUnique({ where: { dropboxFileId: params.dropboxFileId } })
+  const existingExtraction = await db.extraction.findUnique({ where: { sourceFileId: params.sourceFileId } })
 
   const extraction = existingExtraction
     ? await db.extraction.update({
@@ -64,7 +64,7 @@ export async function ingestStatement(
         data: { rawModelOutput: rawOutput, status: 'success', extractedAt: new Date() },
       })
     : await db.extraction.create({
-        data: { dropboxFileId: params.dropboxFileId, rawModelOutput: rawOutput, status: 'success' },
+        data: { sourceFileId: params.sourceFileId, rawModelOutput: rawOutput, status: 'success' },
       })
 
   // Real statements have MULTIPLE line items sharing the same accountItem (e.g. one

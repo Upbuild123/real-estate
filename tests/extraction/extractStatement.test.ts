@@ -19,10 +19,10 @@ import { extractStructuredDataFromPdf, extractStructuredDataFromText, Extraction
 describe('ingestStatement', () => {
   it('creates FinancialRecord rows from extracted line items, tagging recurring correctly', async () => {
     const property = await createProperty({ name: 'Ide Extract Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-1',
+        driveFileId: 'dbx-statement-1',
         filename: '429878_2026-02_report.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -31,7 +31,7 @@ describe('ingestStatement', () => {
     })
 
     const result = await ingestStatement({
-      dropboxFileId: dropboxFile.id,
+      sourceFileId: sourceFile.id,
       propertyId: property.id,
       pdfBase64: 'ZmFrZQ==',
     })
@@ -48,10 +48,10 @@ describe('ingestStatement', () => {
 
   it('ingests an xlsx statement via extractStructuredDataFromText, converting the file to text first', async () => {
     const property = await createProperty({ name: 'Ide Extract Xlsx Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-xlsx',
+        driveFileId: 'dbx-statement-xlsx',
         filename: '457917_2026-08_report.xlsx',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -60,7 +60,7 @@ describe('ingestStatement', () => {
     })
 
     const result = await ingestStatement({
-      dropboxFileId: dropboxFile.id,
+      sourceFileId: sourceFile.id,
       propertyId: property.id,
       xlsxBase64: 'ZmFrZS14bHN4',
     })
@@ -75,10 +75,10 @@ describe('ingestStatement', () => {
 
   it('creates RentRollEntry rows from the extracted rent roll', async () => {
     const property = await createProperty({ name: 'Ide Extract Rent Roll Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-rentroll',
+        driveFileId: 'dbx-statement-rentroll',
         filename: 'x.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -87,7 +87,7 @@ describe('ingestStatement', () => {
     })
 
     const result = await ingestStatement({
-      dropboxFileId: dropboxFile.id,
+      sourceFileId: sourceFile.id,
       propertyId: property.id,
       pdfBase64: 'ZmFrZQ==',
     })
@@ -108,10 +108,10 @@ describe('ingestStatement', () => {
 
   it('replaces RentRollEntry rows on re-ingestion rather than duplicating them', async () => {
     const property = await createProperty({ name: 'Ide Extract Rent Roll Reingest Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-rentroll-2',
+        driveFileId: 'dbx-statement-rentroll-2',
         filename: 'x.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -119,8 +119,8 @@ describe('ingestStatement', () => {
       },
     })
 
-    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
-    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
 
     const entries = await db.rentRollEntry.findMany({ where: { propertyId: property.id } })
     expect(entries).toHaveLength(1)
@@ -128,17 +128,17 @@ describe('ingestStatement', () => {
 
   it('preserves a manual correction when the same file is re-ingested', async () => {
     const property = await createProperty({ name: 'Ide Extract Test 2', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-2',
+        driveFileId: 'dbx-statement-2',
         filename: 'x.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
         storageUrl: 'https://blob.example.com/x.pdf',
       },
     })
-    const first = await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    const first = await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
     if (first.status !== 'success') throw new Error('setup failed')
 
     const rentRecord = await db.financialRecord.findFirstOrThrow({
@@ -146,7 +146,7 @@ describe('ingestStatement', () => {
     })
     await db.financialRecord.update({ where: { id: rentRecord.id }, data: { amount: 999999, source: 'manual' } })
 
-    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
 
     const afterReingest = await db.financialRecord.findUniqueOrThrow({ where: { id: rentRecord.id } })
     expect(afterReingest.amount).toBe(999999)
@@ -155,10 +155,10 @@ describe('ingestStatement', () => {
 
   it('keeps multiple line items with the same accountItem as separate records (one per rental unit)', async () => {
     const property = await createProperty({ name: 'Ide Extract Test Multi Unit', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-multiunit',
+        driveFileId: 'dbx-statement-multiunit',
         filename: 'multi-unit.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -176,7 +176,7 @@ describe('ingestStatement', () => {
     ;(extractStructuredDataFromPdf as any).mockResolvedValueOnce(multiUnitFixture)
 
     const result = await ingestStatement({
-      dropboxFileId: dropboxFile.id,
+      sourceFileId: sourceFile.id,
       propertyId: property.id,
       pdfBase64: 'ZmFrZQ==',
     })
@@ -190,10 +190,10 @@ describe('ingestStatement', () => {
 
   it('does not duplicate a manually-corrected line item when re-ingesting a statement with multiple same-accountItem lines', async () => {
     const property = await createProperty({ name: 'Ide Extract Manual Multi Unit Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-manual-multiunit',
+        driveFileId: 'dbx-statement-manual-multiunit',
         filename: 'multi-unit-manual.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -211,7 +211,7 @@ describe('ingestStatement', () => {
     ;(extractStructuredDataFromPdf as any).mockResolvedValueOnce(multiUnitFixture)
 
     const first = await ingestStatement({
-      dropboxFileId: dropboxFile.id,
+      sourceFileId: sourceFile.id,
       propertyId: property.id,
       pdfBase64: 'ZmFrZQ==',
     })
@@ -226,7 +226,7 @@ describe('ingestStatement', () => {
     })
 
     ;(extractStructuredDataFromPdf as any).mockResolvedValueOnce(multiUnitFixture)
-    await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
 
     const rentRecords = await db.financialRecord.findMany({
       where: { propertyId: property.id, accountItem: 'Rent' },
@@ -240,10 +240,10 @@ describe('ingestStatement', () => {
   it('re-ingesting a file that fails extraction twice returns a graceful failure both times, with one Extraction row', async () => {
     ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json 1'))
     const property = await createProperty({ name: 'Ide Extract Double Fail Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-double-fail',
+        driveFileId: 'dbx-statement-double-fail',
         filename: 'x.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -251,14 +251,14 @@ describe('ingestStatement', () => {
       },
     })
 
-    const first = await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    const first = await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
     expect(first.status).toBe('failed')
 
     ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json 2'))
     let second: Awaited<ReturnType<typeof ingestStatement>> | undefined
     let threw = false
     try {
-      second = await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+      second = await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
     } catch {
       threw = true
     }
@@ -266,7 +266,7 @@ describe('ingestStatement', () => {
     expect(threw).toBe(false)
     expect(second?.status).toBe('failed')
 
-    const extractions = await db.extraction.findMany({ where: { dropboxFileId: dropboxFile.id } })
+    const extractions = await db.extraction.findMany({ where: { sourceFileId: sourceFile.id } })
     expect(extractions).toHaveLength(1)
     expect(extractions[0].status).toBe('failed')
   })
@@ -274,10 +274,10 @@ describe('ingestStatement', () => {
   it('marks the extraction as failed and creates no records when the model output cannot be parsed', async () => {
     ;(extractStructuredDataFromPdf as any).mockRejectedValueOnce(new ExtractionParseError('bad json'))
     const property = await createProperty({ name: 'Ide Extract Fail Test', address: 'x' })
-    const dropboxFile = await db.dropboxFile.create({
+    const sourceFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx-statement-3',
+        driveFileId: 'dbx-statement-3',
         filename: 'x.pdf',
         uploadedAt: new Date(),
         fileType: 'statement',
@@ -285,10 +285,10 @@ describe('ingestStatement', () => {
       },
     })
 
-    const result = await ingestStatement({ dropboxFileId: dropboxFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
+    const result = await ingestStatement({ sourceFileId: sourceFile.id, propertyId: property.id, pdfBase64: 'ZmFrZQ==' })
 
     expect(result.status).toBe('failed')
-    const extraction = await db.extraction.findUnique({ where: { dropboxFileId: dropboxFile.id } })
+    const extraction = await db.extraction.findUnique({ where: { sourceFileId: sourceFile.id } })
     expect(extraction?.status).toBe('failed')
     const records = await db.financialRecord.findMany({ where: { propertyId: property.id } })
     expect(records).toHaveLength(0)
@@ -298,7 +298,7 @@ describe('ingestStatement', () => {
     await db.financialRecord.deleteMany({})
     await db.rentRollEntry.deleteMany({})
     await db.extraction.deleteMany({})
-    await db.dropboxFile.deleteMany({})
+    await db.sourceFile.deleteMany({})
     await db.property.deleteMany({
       where: {
         name: {

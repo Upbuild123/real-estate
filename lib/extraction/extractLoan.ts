@@ -6,7 +6,7 @@ import { LOAN_SCHEMA_DESCRIPTION, type LoanExtraction } from './loanSchema'
 const LOAN_SYSTEM_PROMPT = `You are extracting structured data from a Japanese bank loan repayment schedule (証書貸付ご返済予定表). Extract the loan terms and every row of the payment schedule table.`
 
 export async function ingestLoanDocument(params: {
-  dropboxFileId: string | null
+  sourceFileId: string | null
   propertyId: string
   pdfBase64: string
 }): Promise<{ status: 'success'; loanId: string } | { status: 'failed'; error: string }> {
@@ -36,15 +36,15 @@ export async function ingestLoanDocument(params: {
     monthlyPrincipal: extracted.monthlyPrincipal,
     originationDate: new Date(extracted.originationDate),
     maturityDate: new Date(extracted.maturityDate),
-    sourceFileId: params.dropboxFileId ?? undefined,
+    sourceFileId: params.sourceFileId ?? undefined,
   }
 
-  // Prevent duplicate Loan rows when the same Dropbox file is re-processed (e.g. a
-  // re-triggered sync). Manual uploads (dropboxFileId === null) always create a new row,
+  // Prevent duplicate Loan rows when the same source file is re-processed (e.g. a
+  // re-triggered sync). Manual uploads (sourceFileId === null) always create a new row,
   // since there's no reliable way to tell "same document re-uploaded" from "new document"
   // without a source file identity to key on.
-  const existingLoan = params.dropboxFileId
-    ? await db.loan.findFirst({ where: { propertyId: params.propertyId, sourceFileId: params.dropboxFileId } })
+  const existingLoan = params.sourceFileId
+    ? await db.loan.findFirst({ where: { propertyId: params.propertyId, sourceFileId: params.sourceFileId } })
     : null
 
   const loan = existingLoan

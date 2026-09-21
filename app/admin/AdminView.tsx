@@ -44,15 +44,15 @@ function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
   const { message, isError, submit } = useSubmitState()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [dropboxFolderPath, setDropboxFolderPath] = useState('')
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const ok = await submit('/api/properties', { name, address, dropboxFolderPath: dropboxFolderPath || undefined })
+    const ok = await submit('/api/properties', { name, address, googleDriveFolderId: googleDriveFolderId || undefined })
     if (ok) {
       setName('')
       setAddress('')
-      setDropboxFolderPath('')
+      setGoogleDriveFolderId('')
       onSaved()
     }
   }
@@ -69,8 +69,8 @@ function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
         <input value={address} onChange={(e) => setAddress(e.target.value)} required />
       </label>
       <label>
-        Dropbox Folder Path (optional, e.g. /Michael Sloyer/Ide building/2026)
-        <input value={dropboxFolderPath} onChange={(e) => setDropboxFolderPath(e.target.value)} />
+        Google Drive Folder ID (optional, e.g. from the folder's URL: drive.google.com/drive/folders/FOLDER_ID)
+        <input value={googleDriveFolderId} onChange={(e) => setGoogleDriveFolderId(e.target.value)} />
       </label>
       <button type="submit">Add Property</button>
       <StatusLine message={message} isError={isError} />

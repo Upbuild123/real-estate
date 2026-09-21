@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../../lib/dropboxSync', () => ({
-  syncDropboxFolder: vi.fn().mockResolvedValue({ newFiles: 2, skipped: 1, failed: 0 }),
+vi.mock('../../lib/driveSync', () => ({
+  syncDriveFolder: vi.fn().mockResolvedValue({ newFiles: 2, skipped: 1, failed: 0 }),
 }))
 
 vi.mock('../../lib/properties', () => ({
@@ -9,15 +9,15 @@ vi.mock('../../lib/properties', () => ({
 }))
 
 import { POST } from '../../app/api/sync/route'
-import { syncDropboxFolder } from '../../lib/dropboxSync'
+import { syncDriveFolder } from '../../lib/driveSync'
 import { getProperty } from '../../lib/properties'
 
 describe('POST /api/sync', () => {
-  it('looks up the property\'s stored dropboxFolderPath and triggers a sync', async () => {
+  it('looks up the property\'s stored googleDriveFolderId and triggers a sync', async () => {
     ;(getProperty as any).mockResolvedValueOnce({
       id: 'prop-1',
       name: 'Ide building',
-      dropboxFolderPath: '/Michael Sloyer/Ide building/2026',
+      googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ',
     })
 
     const request = new Request('http://localhost/api/sync', {
@@ -27,9 +27,9 @@ describe('POST /api/sync', () => {
     const response = await POST(request)
     const body = await response.json()
 
-    expect(syncDropboxFolder).toHaveBeenCalledWith({
+    expect(syncDriveFolder).toHaveBeenCalledWith({
       id: 'prop-1',
-      dropboxFolderPath: '/Michael Sloyer/Ide building/2026',
+      googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ',
     })
     expect(body).toEqual({ newFiles: 2, skipped: 1, failed: 0 })
   })
@@ -53,8 +53,8 @@ describe('POST /api/sync', () => {
     expect(response.status).toBe(404)
   })
 
-  it('returns 400 when the property has no dropboxFolderPath configured', async () => {
-    ;(getProperty as any).mockResolvedValueOnce({ id: 'prop-2', name: 'No Folder', dropboxFolderPath: null })
+  it('returns 400 when the property has no googleDriveFolderId configured', async () => {
+    ;(getProperty as any).mockResolvedValueOnce({ id: 'prop-2', name: 'No Folder', googleDriveFolderId: null })
     const request = new Request('http://localhost/api/sync', {
       method: 'POST',
       body: JSON.stringify({ propertyId: 'prop-2' }),
@@ -62,7 +62,7 @@ describe('POST /api/sync', () => {
     const response = await POST(request)
     expect(response.status).toBe(400)
     const body = await response.json()
-    expect(body.error).toMatch(/dropboxFolderPath/i)
+    expect(body.error).toMatch(/googleDriveFolderId/i)
   })
 
   it('returns 400 for malformed JSON body', async () => {
