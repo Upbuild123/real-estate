@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const pdfBase64 = Buffer.from(arrayBuffer).toString('base64')
 
     try {
-      const result = await ingestLoanDocument({ dropboxFileId: null, propertyId, pdfBase64 })
+      const result = await ingestLoanDocument({ sourceFileId: null, propertyId, pdfBase64 })
       return Response.json(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to ingest loan document'

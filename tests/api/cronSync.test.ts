@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterAll } from 'vitest'
 
-vi.mock('../../lib/dropboxSync', () => ({
-  syncDropboxFolder: vi.fn().mockResolvedValue({ newFiles: 1, skipped: 0, failed: 0 }),
+vi.mock('../../lib/driveSync', () => ({
+  syncDriveFolder: vi.fn().mockResolvedValue({ newFiles: 1, skipped: 0, failed: 0 }),
 }))
 
 vi.mock('../../lib/properties', () => ({
@@ -13,7 +13,7 @@ vi.mock('../../lib/notifications', () => ({
 }))
 
 import { GET } from '../../app/api/cron/sync/route'
-import { syncDropboxFolder } from '../../lib/dropboxSync'
+import { syncDriveFolder } from '../../lib/driveSync'
 import { listProperties } from '../../lib/properties'
 import { checkAndNotify } from '../../lib/notifications'
 
@@ -36,21 +36,21 @@ describe('GET /api/cron/sync', () => {
     expect(response.status).toBe(401)
   })
 
-  it('syncs every active property that has a dropboxFolderPath configured, skipping those without one', async () => {
+  it('syncs every active property that has a googleDriveFolderId configured, skipping those without one', async () => {
     process.env.CRON_SECRET = 'test-secret'
     ;(listProperties as any).mockResolvedValueOnce([
-      { id: 'prop-1', name: 'Ide', dropboxFolderPath: '/Michael Sloyer/Ide building/2026' },
-      { id: 'prop-2', name: 'No Folder Property', dropboxFolderPath: null },
+      { id: 'prop-1', name: 'Ide', googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ' },
+      { id: 'prop-2', name: 'No Folder Property', googleDriveFolderId: null },
     ])
 
     const response = await GET(authedRequest())
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(syncDropboxFolder).toHaveBeenCalledTimes(1)
-    expect(syncDropboxFolder).toHaveBeenCalledWith({
+    expect(syncDriveFolder).toHaveBeenCalledTimes(1)
+    expect(syncDriveFolder).toHaveBeenCalledWith({
       id: 'prop-1',
-      dropboxFolderPath: '/Michael Sloyer/Ide building/2026',
+      googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ',
     })
     expect(body.results).toHaveLength(1)
     expect(body.results[0].propertyId).toBe('prop-1')
@@ -60,11 +60,11 @@ describe('GET /api/cron/sync', () => {
   it('continues syncing remaining properties if one property sync throws', async () => {
     process.env.CRON_SECRET = 'test-secret'
     ;(listProperties as any).mockResolvedValueOnce([
-      { id: 'prop-1', name: 'Ide', dropboxFolderPath: '/a' },
-      { id: 'prop-2', name: 'D05', dropboxFolderPath: '/b' },
+      { id: 'prop-1', name: 'Ide', googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ' },
+      { id: 'prop-2', name: 'D05', googleDriveFolderId: '1abcDEF23456ghijKLmnop789QRstuv0' },
     ])
-    ;(syncDropboxFolder as any).mockRejectedValueOnce(new Error('Dropbox API error'))
-    ;(syncDropboxFolder as any).mockResolvedValueOnce({ newFiles: 1, skipped: 0, failed: 0 })
+    ;(syncDriveFolder as any).mockRejectedValueOnce(new Error('Google Drive API error'))
+    ;(syncDriveFolder as any).mockResolvedValueOnce({ newFiles: 1, skipped: 0, failed: 0 })
 
     const response = await GET(authedRequest())
     const body = await response.json()

@@ -4,7 +4,7 @@ import type { Property } from '@prisma/client'
 export async function createProperty(input: {
   name: string
   address: string
-  dropboxFolderPath?: string
+  googleDriveFolderId?: string
 }): Promise<Property> {
   return db.property.create({ data: input })
 }

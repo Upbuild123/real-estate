@@ -9,13 +9,13 @@ describe('properties', () => {
     expect(found?.name).toBe('Ide building')
   })
 
-  it('stores an optional dropboxFolderPath', async () => {
+  it('stores an optional googleDriveFolderId', async () => {
     const created = await createProperty({
       name: 'Ide building',
       address: 'x',
-      dropboxFolderPath: '/Michael Sloyer/Ide building/2026',
+      googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ',
     })
-    expect(created.dropboxFolderPath).toBe('/Michael Sloyer/Ide building/2026')
+    expect(created.googleDriveFolderId).toBe('1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ')
   })
 
   it('lists only active properties by default', async () => {

@@ -13,10 +13,10 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Malformed JSON body' }, { status: 400 })
   }
 
-  const { name, address, dropboxFolderPath } = body as {
+  const { name, address, googleDriveFolderId } = body as {
     name?: unknown
     address?: unknown
-    dropboxFolderPath?: unknown
+    googleDriveFolderId?: unknown
   }
 
   if (typeof name !== 'string' || name.trim() === '') {
@@ -25,15 +25,15 @@ export async function POST(request: Request) {
   if (typeof address !== 'string' || address.trim() === '') {
     return Response.json({ error: 'address is required and must be a non-empty string' }, { status: 400 })
   }
-  if (dropboxFolderPath !== undefined && typeof dropboxFolderPath !== 'string') {
-    return Response.json({ error: 'dropboxFolderPath must be a string if provided' }, { status: 400 })
+  if (googleDriveFolderId !== undefined && typeof googleDriveFolderId !== 'string') {
+    return Response.json({ error: 'googleDriveFolderId must be a string if provided' }, { status: 400 })
   }
 
   try {
     const property = await createProperty({
       name,
       address,
-      dropboxFolderPath: dropboxFolderPath || undefined,
+      googleDriveFolderId: googleDriveFolderId || undefined,
     })
     return Response.json(property)
   } catch (err) {

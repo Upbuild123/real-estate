@@ -1,4 +1,4 @@
-import { syncDropboxFolder } from '../../../../lib/dropboxSync'
+import { syncDriveFolder } from '../../../../lib/driveSync'
 import { listProperties } from '../../../../lib/properties'
 import { checkAndNotify } from '../../../../lib/notifications'
 
@@ -17,16 +17,16 @@ export async function GET(request: Request) {
   }
 
   const properties = await listProperties()
-  const withFolder = properties.filter((p) => p.dropboxFolderPath)
-  const skippedProperties = properties.filter((p) => !p.dropboxFolderPath).map((p) => p.id)
+  const withFolder = properties.filter((p) => p.googleDriveFolderId)
+  const skippedProperties = properties.filter((p) => !p.googleDriveFolderId).map((p) => p.id)
 
   const results: { propertyId: string; status: 'success' | 'failed'; detail: unknown }[] = []
 
   for (const property of withFolder) {
     try {
-      const result = await syncDropboxFolder({
+      const result = await syncDriveFolder({
         id: property.id,
-        dropboxFolderPath: property.dropboxFolderPath as string,
+        googleDriveFolderId: property.googleDriveFolderId as string,
       })
       results.push({ propertyId: property.id, status: 'success', detail: result })
     } catch (err) {
