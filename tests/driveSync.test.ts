@@ -1,11 +1,11 @@
-// tests/dropboxSync.test.ts
+// tests/driveSync.test.ts
 import { describe, it, expect, vi, afterAll, afterEach } from 'vitest'
 import { db } from '../lib/db'
 import { createProperty } from '../lib/properties'
 
-vi.mock('../lib/dropboxClient', () => ({
+vi.mock('../lib/googleDriveClient', () => ({
   listStatementFiles: vi.fn().mockResolvedValue([
-    { id: 'dbx1', name: '429878_2026-02_report.pdf', pathLower: '/ide/429878_2026-02_report.pdf', serverModified: new Date('2026-02-15') },
+    { id: 'drive1', name: '429878_2026-02_report.pdf', modifiedTime: new Date('2026-02-15') },
   ]),
   downloadFile: vi.fn().mockResolvedValue(Buffer.from('pdf-bytes')),
 }))
@@ -31,31 +31,31 @@ vi.mock('../lib/anomalyRules', () => ({
   runAnomalyRules: vi.fn().mockResolvedValue([]),
 }))
 
-import { syncDropboxFolder } from '../lib/dropboxSync'
-import { listStatementFiles } from '../lib/dropboxClient'
+import { syncDriveFolder } from '../lib/driveSync'
+import { listStatementFiles } from '../lib/googleDriveClient'
 import { ingestStatement } from '../lib/extraction/extractStatement'
 import { ingestLoanDocument } from '../lib/extraction/extractLoan'
 import { runAnomalyRules } from '../lib/anomalyRules'
 
-describe('syncDropboxFolder', () => {
-  it('creates a DropboxFile record for a new file', async () => {
+describe('syncDriveFolder', () => {
+  it('creates a SourceFile record for a new file', async () => {
     const property = await createProperty({ name: 'Ide Sync Test', address: 'x' })
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
     expect(result.newFiles).toBe(1)
     expect(result.skipped).toBe(0)
-    const stored = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx1' } })
+    const stored = await db.sourceFile.findUnique({ where: { driveFileId: 'drive1' } })
     expect(stored?.filename).toBe('429878_2026-02_report.pdf')
     expect(stored?.fileType).toBe('statement')
   })
 
   it('passes an xlsx statement to ingestStatement as xlsxBase64 rather than pdfBase64', async () => {
     vi.mocked(listStatementFiles).mockResolvedValueOnce([
-      { id: 'dbx-xlsx-1', name: '457917_2026-08_report.xlsx', pathLower: '/ide/457917_2026-08_report.xlsx', serverModified: new Date('2026-08-14') },
+      { id: 'drive-xlsx-1', name: '457917_2026-08_report.xlsx', modifiedTime: new Date('2026-08-14') },
     ])
     vi.mocked(ingestStatement).mockClear()
 
     const property = await createProperty({ name: 'Ide Sync Xlsx Test', address: 'x' })
-    await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(ingestStatement).toHaveBeenCalledWith(
       expect.objectContaining({ xlsxBase64: expect.any(String) })
@@ -64,12 +64,12 @@ describe('syncDropboxFolder', () => {
     expect('pdfBase64' in call).toBe(false)
   })
 
-  it('skips a file already ingested with a successful extraction (dedupe by dropboxFileId)', async () => {
+  it('skips a file already ingested with a successful extraction (dedupe by driveFileId)', async () => {
     const property = await createProperty({ name: 'Ide Sync Test 2', address: 'x' })
-    const existingFile = await db.dropboxFile.create({
+    const existingFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx1',
+        driveFileId: 'drive1',
         filename: '429878_2026-02_report.pdf',
         uploadedAt: new Date('2026-02-15'),
         fileType: 'statement',
@@ -77,47 +77,45 @@ describe('syncDropboxFolder', () => {
       },
     })
     await db.extraction.create({
-      data: { dropboxFileId: existingFile.id, rawModelOutput: '{}', status: 'success' },
+      data: { sourceFileId: existingFile.id, rawModelOutput: '{}', status: 'success' },
     })
     vi.mocked(ingestStatement).mockClear()
 
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(result.newFiles).toBe(0)
     expect(result.skipped).toBe(1)
     expect(ingestStatement).not.toHaveBeenCalled()
   })
 
-  it('retries a file that has a DropboxFile row but no successful extraction (self-heals a stuck/interrupted sync)', async () => {
+  it('retries a file that has a SourceFile row but no successful extraction (self-heals a stuck/interrupted sync)', async () => {
     const property = await createProperty({ name: 'Ide Sync Test 6', address: 'x' })
-    const stuckFile = await db.dropboxFile.create({
+    const stuckFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx1',
+        driveFileId: 'drive1',
         filename: '429878_2026-02_report.pdf',
         uploadedAt: new Date('2026-02-15'),
         fileType: 'statement',
         storageUrl: 'https://blob.example.com/stuck.pdf',
       },
     })
-    // No Extraction row at all — simulates a prior sync that was killed (e.g. by a function
-    // timeout) after creating the DropboxFile row but before extraction ran.
     vi.mocked(ingestStatement).mockClear()
 
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(result.newFiles).toBe(0)
     expect(result.skipped).toBe(0)
     expect(ingestStatement).toHaveBeenCalledTimes(1)
-    expect(ingestStatement).toHaveBeenCalledWith(expect.objectContaining({ dropboxFileId: stuckFile.id }))
+    expect(ingestStatement).toHaveBeenCalledWith(expect.objectContaining({ sourceFileId: stuckFile.id }))
   })
 
   it('retries a file whose only extraction attempt failed', async () => {
     const property = await createProperty({ name: 'Ide Sync Test 7', address: 'x' })
-    const failedFile = await db.dropboxFile.create({
+    const failedFile = await db.sourceFile.create({
       data: {
         propertyId: property.id,
-        dropboxFileId: 'dbx1',
+        driveFileId: 'drive1',
         filename: '429878_2026-02_report.pdf',
         uploadedAt: new Date('2026-02-15'),
         fileType: 'statement',
@@ -125,11 +123,11 @@ describe('syncDropboxFolder', () => {
       },
     })
     await db.extraction.create({
-      data: { dropboxFileId: failedFile.id, rawModelOutput: 'bad json', status: 'failed' },
+      data: { sourceFileId: failedFile.id, rawModelOutput: 'bad json', status: 'failed' },
     })
     vi.mocked(ingestStatement).mockClear()
 
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(result.newFiles).toBe(0)
     expect(result.skipped).toBe(0)
@@ -142,13 +140,13 @@ describe('syncDropboxFolder', () => {
     vi.mocked(runAnomalyRules).mockClear()
     vi.mocked(ingestLoanDocument).mockClear()
 
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(result.newFiles).toBe(1)
     expect(ingestStatement).toHaveBeenCalledTimes(1)
-    const dropboxFile = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx1' } })
+    const sourceFile = await db.sourceFile.findUnique({ where: { driveFileId: 'drive1' } })
     expect(ingestStatement).toHaveBeenCalledWith(
-      expect.objectContaining({ propertyId: property.id, dropboxFileId: dropboxFile!.id })
+      expect.objectContaining({ propertyId: property.id, sourceFileId: sourceFile!.id })
     )
     expect(runAnomalyRules).toHaveBeenCalledTimes(1)
     expect(runAnomalyRules).toHaveBeenCalledWith(property.id, '2026-02')
@@ -157,31 +155,31 @@ describe('syncDropboxFolder', () => {
 
   it('triggers ingestLoanDocument (and not ingestStatement) for a new loan file', async () => {
     vi.mocked(listStatementFiles).mockResolvedValueOnce([
-      { id: 'dbx-loan-1', name: 'loan-schedule.pdf', pathLower: '/ide/loan-schedule.pdf', serverModified: new Date('2026-02-15') },
+      { id: 'drive-loan-1', name: 'loan-schedule.pdf', modifiedTime: new Date('2026-02-15') },
     ])
     const property = await createProperty({ name: 'Ide Sync Test 4', address: 'x' })
     vi.mocked(ingestStatement).mockClear()
     vi.mocked(ingestLoanDocument).mockClear()
     vi.mocked(runAnomalyRules).mockClear()
 
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(result.newFiles).toBe(1)
     expect(ingestLoanDocument).toHaveBeenCalledTimes(1)
-    const dropboxFile = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx-loan-1' } })
+    const sourceFile = await db.sourceFile.findUnique({ where: { driveFileId: 'drive-loan-1' } })
     expect(ingestLoanDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ propertyId: property.id, dropboxFileId: dropboxFile!.id })
+      expect.objectContaining({ propertyId: property.id, sourceFileId: sourceFile!.id })
     )
     expect(ingestStatement).not.toHaveBeenCalled()
     expect(runAnomalyRules).not.toHaveBeenCalled()
 
-    await db.dropboxFile.deleteMany({ where: { dropboxFileId: 'dbx-loan-1' } })
+    await db.sourceFile.deleteMany({ where: { driveFileId: 'drive-loan-1' } })
   })
 
   it('continues processing subsequent files when one ingestion fails', async () => {
     vi.mocked(listStatementFiles).mockResolvedValueOnce([
-      { id: 'dbx-fail-1', name: 'fail_report.pdf', pathLower: '/ide/fail_report.pdf', serverModified: new Date('2026-02-15') },
-      { id: 'dbx-fail-2', name: 'ok_report.pdf', pathLower: '/ide/ok_report.pdf', serverModified: new Date('2026-02-16') },
+      { id: 'drive-fail-1', name: 'fail_report.pdf', modifiedTime: new Date('2026-02-15') },
+      { id: 'drive-fail-2', name: 'ok_report.pdf', modifiedTime: new Date('2026-02-16') },
     ])
     const property = await createProperty({ name: 'Ide Sync Test 5', address: 'x' })
     vi.mocked(ingestStatement).mockClear()
@@ -189,32 +187,32 @@ describe('syncDropboxFolder', () => {
       .mockRejectedValueOnce(new Error('extraction blew up'))
       .mockResolvedValueOnce({ status: 'success', extractionId: 'ext2', recordsCreated: 1, activityMonth: '2026-02' })
 
-    const result = await syncDropboxFolder({ id: property.id, dropboxFolderPath: '/ide' })
+    const result = await syncDriveFolder({ id: property.id, googleDriveFolderId: 'folder-ide' })
 
     expect(result.newFiles).toBe(2)
     expect(result.failed).toBe(1)
     expect(ingestStatement).toHaveBeenCalledTimes(2)
-    const firstFile = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx-fail-1' } })
-    const secondFile = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx-fail-2' } })
+    const firstFile = await db.sourceFile.findUnique({ where: { driveFileId: 'drive-fail-1' } })
+    const secondFile = await db.sourceFile.findUnique({ where: { driveFileId: 'drive-fail-2' } })
     expect(firstFile).not.toBeNull()
     expect(secondFile).not.toBeNull()
 
-    await db.dropboxFile.deleteMany({ where: { dropboxFileId: { in: ['dbx-fail-1', 'dbx-fail-2'] } } })
+    await db.sourceFile.deleteMany({ where: { driveFileId: { in: ['drive-fail-1', 'drive-fail-2'] } } })
   })
 
   afterEach(async () => {
-    // dropboxFileId is globally unique; clean up between tests so a later
-    // test's sync of 'dbx1' doesn't collide with an earlier test's record.
-    // Extraction has a required FK to DropboxFile, so it must go first.
-    const existing = await db.dropboxFile.findUnique({ where: { dropboxFileId: 'dbx1' } })
+    // driveFileId is globally unique; clean up between tests so a later test's sync of
+    // 'drive1' doesn't collide with an earlier test's record. Extraction has a required FK
+    // to SourceFile, so it must go first.
+    const existing = await db.sourceFile.findUnique({ where: { driveFileId: 'drive1' } })
     if (existing) {
-      await db.extraction.deleteMany({ where: { dropboxFileId: existing.id } })
-      await db.dropboxFile.delete({ where: { id: existing.id } })
+      await db.extraction.deleteMany({ where: { sourceFileId: existing.id } })
+      await db.sourceFile.delete({ where: { id: existing.id } })
     }
   })
 
   afterAll(async () => {
-    await db.dropboxFile.deleteMany({})
+    await db.sourceFile.deleteMany({})
     await db.property.deleteMany({
       where: {
         name: {
