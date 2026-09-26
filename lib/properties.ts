@@ -16,3 +16,7 @@ export async function listProperties(): Promise<Property[]> {
 export async function getProperty(id: string): Promise<Property | null> {
   return db.property.findUnique({ where: { id } })
 }
+
+export async function updatePropertyDriveFolder(id: string, googleDriveFolderId: string | null): Promise<Property> {
+  return db.property.update({ where: { id }, data: { googleDriveFolderId } })
+}

@@ -1,19 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import styles from './admin.module.css'
 
-type PropertyOption = { id: string; name: string }
+type PropertyOption = { id: string; name: string; googleDriveFolderId: string | null }
 
 function useSubmitState() {
   const [message, setMessage] = useState<string | null>(null)
   const [isError, setIsError] = useState(false)
 
-  async function submit(url: string, body: unknown) {
+  async function submit(url: string, body: unknown, method: 'POST' | 'PATCH' = 'POST') {
     setMessage(null)
     setIsError(false)
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
@@ -37,7 +38,49 @@ function useSubmitState() {
 
 function StatusLine({ message, isError }: { message: string | null; isError: boolean }) {
   if (!message) return null
-  return <p style={{ color: isError ? 'crimson' : 'green' }}>{message}</p>
+  return (
+    <p className={styles.status} style={{ color: isError ? 'crimson' : 'green' }}>
+      {message}
+    </p>
+  )
+}
+
+function DriveFolderRow({ property }: { property: PropertyOption }) {
+  const { message, isError, submit } = useSubmitState()
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState(property.googleDriveFolderId ?? '')
+
+  async function handleSave() {
+    await submit(`/api/properties/${property.id}`, { googleDriveFolderId: googleDriveFolderId || null }, 'PATCH')
+  }
+
+  return (
+    <div>
+      <div className={styles.propertyRow}>
+        <span className={styles.propertyName}>{property.name}</span>
+        <input
+          value={googleDriveFolderId}
+          onChange={(e) => setGoogleDriveFolderId(e.target.value)}
+          placeholder="Google Drive Folder ID"
+        />
+        <button onClick={handleSave}>Save</button>
+      </div>
+      <StatusLine message={message} isError={isError} />
+    </div>
+  )
+}
+
+function DriveFoldersSection({ properties }: { properties: PropertyOption[] }) {
+  return (
+    <div className={styles.section}>
+      <h2>Google Drive Folders</h2>
+      <p className={styles.status}>
+        Paste each property&apos;s Drive folder ID from its URL (drive.google.com/drive/folders/FOLDER_ID).
+      </p>
+      {properties.map((p) => (
+        <DriveFolderRow key={p.id} property={p} />
+      ))}
+    </div>
+  )
 }
 
 function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
@@ -58,7 +101,7 @@ function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className={styles.form}>
       <h2>Add Property</h2>
       <label>
         Name
@@ -69,7 +112,7 @@ function AddPropertyForm({ onSaved }: { onSaved: () => void }) {
         <input value={address} onChange={(e) => setAddress(e.target.value)} required />
       </label>
       <label>
-        Google Drive Folder ID (optional, e.g. from the folder's URL: drive.google.com/drive/folders/FOLDER_ID)
+        Google Drive Folder ID (optional, e.g. from the folder&apos;s URL: drive.google.com/drive/folders/FOLDER_ID)
         <input value={googleDriveFolderId} onChange={(e) => setGoogleDriveFolderId(e.target.value)} />
       </label>
       <button type="submit">Add Property</button>
@@ -104,7 +147,7 @@ function AddLoanForm({ properties }: { properties: PropertyOption[] }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className={styles.form}>
       <h2>Add Loan</h2>
       <label>
         Property
@@ -171,7 +214,7 @@ function AddAnnualCostForm({ properties }: { properties: PropertyOption[] }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className={styles.form}>
       <h2>Add Annual Tax / Insurance / Depreciation</h2>
       <label>
         Property
@@ -213,15 +256,28 @@ export function AdminView({ initialProperties }: { initialProperties: PropertyOp
   async function refreshProperties() {
     const response = await fetch('/api/properties')
     const data = await response.json()
-    setProperties(data.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })))
+    setProperties(
+      data.map((p: { id: string; name: string; googleDriveFolderId: string | null }) => ({
+        id: p.id,
+        name: p.name,
+        googleDriveFolderId: p.googleDriveFolderId,
+      }))
+    )
   }
 
   return (
-    <div>
+    <div className={styles.page}>
       <h1>Admin</h1>
-      <AddPropertyForm onSaved={refreshProperties} />
-      <AddLoanForm properties={properties} />
-      <AddAnnualCostForm properties={properties} />
+      <DriveFoldersSection properties={properties} />
+      <div className={styles.section}>
+        <AddPropertyForm onSaved={refreshProperties} />
+      </div>
+      <div className={styles.section}>
+        <AddLoanForm properties={properties} />
+      </div>
+      <div className={styles.section}>
+        <AddAnnualCostForm properties={properties} />
+      </div>
     </div>
   )
 }

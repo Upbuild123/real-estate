@@ -6,5 +6,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function AdminPage() {
   const properties = await listProperties()
-  return <AdminView initialProperties={properties.map((p) => ({ id: p.id, name: p.name }))} />
+  return (
+    <AdminView
+      initialProperties={properties.map((p) => ({ id: p.id, name: p.name, googleDriveFolderId: p.googleDriveFolderId }))}
+    />
+  )
 }

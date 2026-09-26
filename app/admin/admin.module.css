@@ -1,0 +1,78 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--table-border);
+}
+
+.section h2 {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.propertyRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.propertyName {
+  width: 220px;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.propertyRow input {
+  flex: 1;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted-text);
+  width: 100%;
+}
+
+.form input,
+.form select {
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--table-border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.form button {
+  font-size: 14px;
+  padding: 8px 16px;
+  border: 1px solid var(--table-border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 13px;
+}

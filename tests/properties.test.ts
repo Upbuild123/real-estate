@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { db } from '../lib/db'
-import { createProperty, listProperties, getProperty } from '../lib/properties'
+import { createProperty, listProperties, getProperty, updatePropertyDriveFolder } from '../lib/properties'
 
 describe('properties', () => {
   it('creates and retrieves a property', async () => {
@@ -16,6 +16,15 @@ describe('properties', () => {
       googleDriveFolderId: '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ',
     })
     expect(created.googleDriveFolderId).toBe('1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ')
+  })
+
+  it('updates a property\'s Google Drive folder ID', async () => {
+    const created = await createProperty({ name: 'Ide building', address: 'x' })
+    const updated = await updatePropertyDriveFolder(created.id, '1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ')
+    expect(updated.googleDriveFolderId).toBe('1QcFp8ir-wttFotseKq4A7RYQY1gtXasJ')
+
+    const cleared = await updatePropertyDriveFolder(created.id, null)
+    expect(cleared.googleDriveFolderId).toBeNull()
   })
 
   it('lists only active properties by default', async () => {
